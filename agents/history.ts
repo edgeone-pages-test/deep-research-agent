@@ -9,8 +9,8 @@ import { createLogger } from './_shared';
 const logger = createLogger('history');
 
 function getReportStore() {
-    const projectId = process.env.BLOB_PROJECT_ID;
-    const token = process.env.BLOB_TOKEN;
+    const projectId = process.env.PROJECT_ID;
+    const token = process.env.EDGEONE_PAGES_API_TOKEN;
     if (projectId && token) {
         return getStore({ name: 'research-reports', projectId, token });
     }

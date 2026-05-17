@@ -5,6 +5,9 @@ Multi-agent powered deep research assistant with human-in-the-loop approval, par
 ## Features
 
 - **Multi-Stage Research Pipeline** — Decompose → Search (parallel) → Synthesize
+- **Real Web Search** — DuckDuckGo HTML search via Sandbox or runtime fetch
+- **Real Academic Search** — CrossRef API + Semantic Scholar with structured paper data
+- **Sandbox Integration** — Remote code execution via `context.sandbox.commands.run()`
 - **Human-in-the-Loop** — AI generates sub-questions, user reviews and edits before proceeding
 - **Parallel Sub-Agent Invocation** — Literature and web search run simultaneously via `context.agents.invoke()`
 - **Persistent Memory** — Conversation history saved via EdgeOne Pages Memory API
@@ -13,6 +16,7 @@ Multi-agent powered deep research assistant with human-in-the-loop approval, par
 - **Depth Control** — Quick (2-3 min), Standard (5-7 min), Deep (10+ min)
 - **Real-time Streaming** — SSE with progress indicators and stage lifecycle events
 - **i18n** — Chinese and English interface
+- **Graceful Fallback** — Sandbox → runtime fetch → mock data (3-layer fault tolerance)
 
 ## Tech Stack
 
@@ -22,7 +26,7 @@ Multi-agent powered deep research assistant with human-in-the-loop approval, par
 | Styling | Tailwind CSS 3.4 | Dark mode support |
 | Agent Framework | deepagents 1.9+ | Used in `/search` endpoint with tool calling + middleware |
 | LLM Integration | LangChain.js (`@langchain/openai`) | ChatOpenAI for sub-agents |
-| Platform | EdgeOne Pages | Cloud Functions, Memory API, Blob Storage, Agent Invoke |
+| Platform | EdgeOne Pages | Cloud Functions, Memory API, Blob Storage, Sandbox, Agent Invoke |
 | Language | TypeScript 5.6 | ESM modules |
 
 ## Architecture
@@ -50,8 +54,8 @@ Multi-agent powered deep research assistant with human-in-the-loop approval, par
 
 ┌─────────── Sub-Agents ────────────────────────────────────┐
 │ /decompose   — Breaks question into sub-questions         │
-│ /search-lit  — Finds academic papers (model.invoke)       │
-│ /search-web  — Finds web articles (model.invoke)          │
+│ /search-lit  — Real academic search (CrossRef + Semantic Scholar) │
+│ /search-web  — Real web search (DuckDuckGo via Sandbox/fetch)    │
 │ /synthesize  — Compiles full research report              │
 │ /search      — Standalone deepagents search (tool calling)│
 │ /approve     — HITL approval endpoint                     │
@@ -67,6 +71,7 @@ Multi-agent powered deep research assistant with human-in-the-loop approval, par
 |---------|-------|
 | `context.agents.invoke()` | Orchestrator calls 4 sub-agents (decompose, search-lit, search-web, synthesize) |
 | `Promise.all` + `agents.invoke` | Parallel execution of literature + web search |
+| `context.sandbox.commands.run()` | Execute shell commands (curl) in remote sandbox for web scraping |
 | `context.store` (Memory API) | Save user questions and AI reports to conversation history |
 | `context.conversation_id` | Automatic session association across requests |
 | `@edgeone/pages-blob` | Archive completed research reports for later retrieval |
@@ -110,8 +115,9 @@ rm -rf .edgeone/agent-node && edgeone dev
 | `AI_GATEWAY_API_KEY` | Yes | AI Gateway API key |
 | `AI_GATEWAY_BASE_URL` | Yes | AI Gateway base URL |
 | `AI_MODEL` | No | Model name (default: `@Pages/deepseek-v4-flash`) |
-| `BLOB_PROJECT_ID` | No | Blob storage project ID (auto-injected on EdgeOne Pages) |
-| `BLOB_TOKEN` | No | Blob storage token (auto-injected on EdgeOne Pages) |
+| `PROJECT_ID` | No | Pages project ID for Blob/Sandbox (auto-injected on EdgeOne Pages) |
+| `EDGEONE_PAGES_API_TOKEN` | No | API token for Blob/Sandbox access (auto-injected on EdgeOne Pages) |
+| `SANDBOX_API_BASE` | No | Sandbox API endpoint (default: auto-resolved by platform) |
 
 ## Research Flow
 
@@ -133,11 +139,11 @@ rm -rf .edgeone/agent-node && edgeone dev
 ```
 deep-research-edgeone/
 ├── agents/
-│   ├── _shared.ts        # Model init (ChatOpenAI), logger, SSE helpers
+│   ├── _shared.ts        # Model init, logger, SSE helpers, Sandbox utils
 │   ├── research.ts       # Orchestrator — agents.invoke + Memory + Blob
 │   ├── decompose.ts      # Sub-agent: question decomposition
-│   ├── search-lit.ts     # Sub-agent: academic paper search
-│   ├── search-web.ts     # Sub-agent: web article search
+│   ├── search-lit.ts     # Sub-agent: academic search (CrossRef + Semantic Scholar)
+│   ├── search-web.ts     # Sub-agent: web search (DuckDuckGo + Sandbox)
 │   ├── synthesize.ts     # Sub-agent: report compilation
 │   ├── search.ts         # Standalone deepagents search (tool calling demo)
 │   ├── approve.ts        # HITL approval endpoint
@@ -167,11 +173,13 @@ deep-research-edgeone/
 
 ## Development Notes
 
-- **Agent rebuild**: EdgeOne CLI may not hot-reload agent changes reliably. Always run `rm -rf .edgeone/agent-node && edgeone dev` after modifying files in `agents/`.
-- **Blob storage**: Only works when deployed to EdgeOne Pages (or with BLOB_PROJECT_ID + BLOB_TOKEN configured). Returns 503 in local dev without credentials.
+- **Agent rebuild**: EdgeOne CLI may not hot-reload agent changes reliably. Always run `rm -rf .edgeone/agent-node && edgeone pages dev -t <TOKEN>` after modifying files in `agents/`.
+- **Sandbox**: Requires `@edgeone/pages-agent-toolkit` in `.edgeone/agent-node/node_modules/`. In local dev, sandbox may fail to acquire (WAF/network); search agents gracefully fallback to runtime fetch.
+- **Blob storage**: Works with `PROJECT_ID` + `EDGEONE_PAGES_API_TOKEN` configured in `.env`, or auto-injected on deployment.
 - **Memory API**: Requires EdgeOne Pages runtime. Falls back gracefully in local dev.
 - **Model choice**: `@Pages/deepseek-v4-flash` recommended for speed. Avoid `@Pages/glm-5.1` (slow, may timeout).
 - **No `temperature` param**: Some models (kimi-k2.6) only allow temperature=1. Omitted for compatibility.
+- **Search fallback**: Sandbox curl → runtime fetch → mock data. Real search works in both local dev (via fetch) and deployed (via sandbox).
 
 ## Deployment
 

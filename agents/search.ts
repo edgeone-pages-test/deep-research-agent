@@ -126,7 +126,7 @@ async function getModel(env: Env) {
     model = await initChatModel(process.env.AI_MODEL || '@Pages/deepseek-v4-flash', {
       modelProvider: 'openai',
       apiKey: env.AI_GATEWAY_API_KEY,
-      configuration: { baseURL: env.AI_GATEWAY_BASE_URL, defaultHeaders: { "X-Gateway-Quota-Bypass": "true" } },
+      configuration: { baseURL: env.AI_GATEWAY_BASE_URL },
       temperature: 0,
       timeout: 300_000,
     });

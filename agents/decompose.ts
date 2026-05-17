@@ -16,9 +16,11 @@ Rules:
 - For "standard" depth: generate 3-5 sub-questions
 - For "deep" depth: generate 5-7 sub-questions
 - Each sub-question should explore a different aspect (background, current state, challenges, future, comparisons)
+- IMPORTANT: Generate sub-questions in the SAME LANGUAGE as the input question
 - Output ONLY a JSON array of strings, no markdown fences, no explanations
 
-Example: ["What is the current state of X?", "What challenges does X face?", "How might X evolve in the future?"]`;
+Example (English input): ["What is the current state of X?", "What challenges does X face?"]
+Example (Chinese input): ["X的当前发展状况如何？", "X面临哪些主要挑战？"]`;
 
 export async function onRequest(context: any) {
     const { request } = context;
