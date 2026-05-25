@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { ResearchForm } from './components/research-form';
 import { ProgressTree } from './components/progress-tree';
 import { SourcesPanel } from './components/sources-panel';
 import { ReportView } from './components/report-view';
-import { ApprovalCard } from './components/approval-card';
+import { ProjectSelector } from './components/project-selector';
+import { FollowUpChat } from './components/follow-up-chat';
+import { VersionSelector } from './components/version-selector';
+import { DiffView } from './components/diff-view';
 import { LanguageToggle } from '@/components/ui/language-toggle';
 import { TokenUsage } from '@/components/ui/token-usage';
 import { useI18n } from '@/lib/i18n';
@@ -33,11 +36,23 @@ export interface Source {
   citationNumber: number;
 }
 
-interface HistoryItem {
+interface Project {
   id: string;
-  question: string;
-  depth: string;
+  name: string;
   createdAt: string;
+  versionCount: number;
+}
+
+interface VersionInfo {
+  version: number;
+  question: string;
+  trigger: string;
+  createdAt: string;
+}
+
+interface DiffData {
+  v1: { version: number; report: string; createdAt: string; question: string };
+  v2: { version: number; report: string; createdAt: string; question: string };
 }
 
 export default function Home() {
@@ -48,47 +63,81 @@ export default function Home() {
   const [report, setReport] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [tokenUsage, setTokenUsage] = useState({ input: 0, output: 0 });
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const conversationId = useMemo(() => crypto.randomUUID(), []);
 
-  // HITL state
-  const [hitlPending, setHitlPending] = useState(false);
-  const [hitlSubQuestions, setHitlSubQuestions] = useState<string[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState('');
-  const [currentDepth, setCurrentDepth] = useState('standard');
+  // Project state
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [versions, setVersions] = useState<VersionInfo[]>([]);
+  const [currentVersion, setCurrentVersion] = useState<number | null>(null);
 
-  // History state
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  // Sidebar collapsed on mobile
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Load history on mount
+  // Diff state
+  const [diffData, setDiffData] = useState<DiffData | null>(null);
+
+  // Load projects on mount
+  useEffect(() => { loadProjects(); }, []);
+
+  // Auto-load latest version when project selected
   useEffect(() => {
-    loadHistory();
-  }, []);
+    if (selectedProjectId) {
+      loadProjectVersions(selectedProjectId);
+    } else {
+      setVersions([]);
+      setCurrentVersion(null);
+      setReport('');
+      setSources([]);
+      setSubagents([]);
+    }
+  }, [selectedProjectId]);
 
-  const loadHistory = async () => {
+  const loadProjects = async () => {
     try {
-      const res = await fetch('/history', {
+      const res = await fetch('/project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'list' }),
       });
       if (res.ok) {
-        const { reports } = await res.json();
-        setHistory(reports || []);
+        const { projects: p } = await res.json();
+        setProjects(p || []);
       }
     } catch {}
   };
 
-  // Load a specific historical report
-  const loadReport = useCallback(async (id: string) => {
+  const loadProjectVersions = async (projectId: string) => {
     try {
-      const res = await fetch('/history', {
+      const res = await fetch('/project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get', id }),
+        body: JSON.stringify({ action: 'get', id: projectId }),
       });
       if (res.ok) {
-        const { report: data } = await res.json();
+        const { versions: v } = await res.json();
+        setVersions(v || []);
+        // Auto-load latest version
+        if (v && v.length > 0) {
+          loadVersion(projectId, v[v.length - 1].version);
+        }
+      }
+    } catch {}
+  };
+
+  const loadVersion = async (projectId: string, version: number) => {
+    try {
+      const res = await fetch('/project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_version', id: projectId, version }),
+      });
+      if (res.ok) {
+        const { version: data } = await res.json();
         if (data) {
           setReport(data.report || '');
+          setCurrentVersion(version);
           const allSources: Source[] = [];
           let counter = 0;
           for (const p of data.papers || []) { counter++; allSources.push({ type: 'academic', citationNumber: counter, ...p }); }
@@ -103,7 +152,78 @@ export default function Home() {
         }
       }
     } catch {}
-  }, []);
+  };
+
+  const handleCreateProject = async (name: string) => {
+    try {
+      const res = await fetch('/project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', name }),
+      });
+      if (res.ok) {
+        const { project } = await res.json();
+        // Optimistic update: immediately add to local state
+        setProjects(prev => [
+          { id: project.id, name: project.name, createdAt: project.createdAt, versionCount: 0 },
+          ...prev,
+        ]);
+        // Clear old project state before selecting the new one
+        setReport('');
+        setSources([]);
+        setSubagents([]);
+        setError(null);
+        setVersions([]);
+        setCurrentVersion(null);
+        setDiffData(null);
+        setTokenUsage({ input: 0, output: 0 });
+        setSelectedProjectId(project.id);
+      }
+    } catch {}
+  };
+
+  const handleDeleteProject = async (id: string) => {
+    try {
+      await fetch('/project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id }),
+      });
+      if (selectedProjectId === id) {
+        setSelectedProjectId(null);
+      }
+      await loadProjects();
+    } catch {}
+  };
+
+  const handleDiff = async (v1: number, v2: number) => {
+    if (!selectedProjectId) return;
+    try {
+      const res = await fetch('/project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'diff', id: selectedProjectId, v1, v2 }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDiffData(data);
+      }
+    } catch {}
+  };
+
+  const handleStop = useCallback(() => {
+    abortControllerRef.current?.abort();
+    setIsResearching(false);
+    // Notify backend to cancel the active run
+    fetch("/stop", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "pages-agent-conversation-id": conversationId,
+      },
+      body: JSON.stringify({ conversationId }),
+    }).catch(() => {});
+  }, [conversationId]);
 
   // Main research handler
   const handleResearch = useCallback(async (question: string, depth: string) => {
@@ -113,51 +233,41 @@ export default function Home() {
     setReport('');
     setError(null);
     setTokenUsage({ input: 0, output: 0 });
-    setHitlPending(false);
-    setHitlSubQuestions([]);
-    setCurrentQuestion(question);
-    setCurrentDepth(depth);
 
-    await streamResearch({ message: question, depth });
-  }, []);
+    await streamResearch({ message: question, depth, projectId: selectedProjectId || undefined });
+  }, [selectedProjectId]);
 
-  // Resume after HITL approval
-  const handleApprove = useCallback(async (approvedQuestions: string[]) => {
-    setHitlPending(false);
+  // Regenerate report (triggered from chat after user confirms)
+  const handleRegenerate = useCallback(async (chatSummary: string) => {
     setIsResearching(true);
+    setSubagents([]);
+    setSources([]);
+    setReport('');
+    setError(null);
+    setTokenUsage({ input: 0, output: 0 });
 
-    // Save approval
-    try {
-      await fetch('/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subQuestions: approvedQuestions, originalQuestion: currentQuestion }),
-      });
-    } catch {}
-
-    // Resume research with approved questions
-    await streamResearch({ message: currentQuestion, depth: currentDepth, approved: true, subQuestions: approvedQuestions });
-  }, [currentQuestion, currentDepth]);
-
-  // Skip HITL — continue with original sub-questions
-  const handleSkipApproval = useCallback(() => {
-    handleApprove(hitlSubQuestions);
-  }, [hitlSubQuestions, handleApprove]);
+    await streamResearch({
+      message: chatSummary,
+      depth: 'standard',
+      projectId: selectedProjectId || undefined,
+    });
+  }, [selectedProjectId]);
 
   // Core streaming logic
   const streamResearch = async (body: Record<string, unknown>) => {
     let citationCounter = 0;
 
+    abortControllerRef.current = new AbortController();
+
     try {
       const response = await fetch('/research', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'pages-agent-conversation-id': conversationId },
         body: JSON.stringify(body),
+        signal: abortControllerRef.current.signal,
       });
 
-      if (!response.ok) {
-        throw new Error(`Research failed: ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`Research failed: ${response.statusText}`);
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response stream');
@@ -184,8 +294,7 @@ export default function Home() {
             const event = JSON.parse(payload);
 
             switch (event.type) {
-              case 'ping':
-                break;
+              case 'ping': break;
 
               case 'subagent_lifecycle':
                 setSubagents(prev => {
@@ -196,7 +305,6 @@ export default function Home() {
                   return [...prev, { id: event.id, agent: event.agent, status: event.status, description: event.description, content: event.content }];
                 });
 
-                // Parse sources from completed search subagents
                 if (event.status === 'complete' && event.content) {
                   try {
                     const parsed = JSON.parse(event.content);
@@ -228,20 +336,6 @@ export default function Home() {
                 }
                 break;
 
-              case 'hitl_request':
-                // Agent is requesting human approval
-                if (event.stage === 'decompose' && Array.isArray(event.data)) {
-                  setHitlPending(true);
-                  setHitlSubQuestions(event.data);
-                  setIsResearching(false); // Pause until user approves
-                  return; // Stop processing stream — user will re-trigger
-                }
-                break;
-
-              case 'progress':
-                // Could update a progress bar UI
-                break;
-
               case 'error_message':
                 setError(event.content);
                 break;
@@ -254,75 +348,154 @@ export default function Home() {
         }
       }
     } catch (e) {
-      setError((e as Error).message);
+      if ((e as Error).name !== 'AbortError') {
+        setError((e as Error).message);
+      }
     } finally {
       setIsResearching(false);
-      loadHistory(); // Refresh history after completion
+      abortControllerRef.current = null;
+      if (selectedProjectId) {
+        // Wait briefly for backend to finish saving the version
+        // (especially when stream was terminated by runtime timeout)
+        await new Promise(r => setTimeout(r, 1500));
+        await loadProjectVersions(selectedProjectId);
+      }
     }
   };
 
+  const selectedProject = projects.find(p => p.id === selectedProjectId);
+
   return (
-    <main className="min-h-screen">
-      {/* Header */}
-      <header className="border-b border-neutral-200 dark:border-neutral-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <h1 className="font-serif text-xl font-bold text-neutral-900 dark:text-warm-100">
-            {t.title}
-          </h1>
-          <span className="text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-full">
-            {t.multiAgent}
-          </span>
-          <span className="text-xs text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
-            deepagents
-          </span>
-          <div className="ml-auto flex items-center gap-3">
-            <TokenUsage inputTokens={tokenUsage.input} outputTokens={tokenUsage.output} />
-            <LanguageToggle />
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Research Form with History */}
-        <ResearchForm onSubmit={handleResearch} isLoading={isResearching} history={history} onLoadReport={loadReport} />
-
-        {/* HITL Approval Card */}
-        {hitlPending && (
-          <ApprovalCard
-            subQuestions={hitlSubQuestions}
-            onApprove={handleApprove}
-            onSkip={handleSkipApproval}
+    <div className="min-h-screen flex">
+      {/* Left Sidebar — Project List */}
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 transition-all overflow-hidden`}>
+        <div className="w-64 h-screen overflow-y-auto p-4">
+          <ProjectSelector
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onSelect={setSelectedProjectId}
+            onCreate={handleCreateProject}
+            onDelete={handleDeleteProject}
           />
-        )}
+        </div>
+      </aside>
 
-        {/* Error Display */}
-        {error && (
-          <div className="mt-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
-            {error}
-          </div>
-        )}
+      {/* Main Content */}
+      <main className="flex-1 min-h-screen overflow-y-auto">
+        {/* Header */}
+        <header className="border-b border-neutral-200 dark:border-neutral-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm sticky top-0 z-10">
+          <div className="px-6 py-4 flex items-center gap-3">
+            {/* Sidebar toggle */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
 
-        {/* Results Area */}
-        {(subagents.length > 0 || report) && (
-          <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column: Progress + Sources */}
-            <div className="lg:col-span-1 space-y-6">
-              <ProgressTree subagents={subagents} isActive={isResearching} />
-              <SourcesPanel sources={sources} />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
             </div>
+            <h1 className="font-serif text-xl font-bold text-neutral-900 dark:text-warm-100">
+              {t.title}
+            </h1>
 
-            {/* Right Column: Report */}
-            <div className="lg:col-span-2">
-              <ReportView content={report} isStreaming={isResearching} />
+            {/* Current project name */}
+            {selectedProject && (
+              <span className="text-sm text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-3 py-1 rounded-full truncate max-w-48">
+                {selectedProject.name}
+              </span>
+            )}
+
+            <div className="ml-auto flex items-center gap-3">
+              <TokenUsage inputTokens={tokenUsage.input} outputTokens={tokenUsage.output} />
+              <LanguageToggle />
             </div>
           </div>
-        )}
-      </div>
-    </main>
+        </header>
+
+        <div className="max-w-6xl mx-auto px-6 py-8">
+          {/* Research Form — only shown when no project selected or project has no versions yet */}
+          {(!selectedProjectId || versions.length === 0) && (
+            <>
+              {selectedProjectId && versions.length === 0 && !isResearching && (
+                <div className="mb-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-sm flex items-center gap-3">
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>项目 <strong>{selectedProject?.name}</strong> 已创建成功！在下方输入研究问题，开始第一次深度研究。</span>
+                </div>
+              )}
+              <ResearchForm key={selectedProjectId || '__none__'} onSubmit={handleResearch} isLoading={isResearching} />
+              {isResearching && (
+                <div className="mt-4 flex justify-center">
+                  <button
+                    onClick={handleStop}
+                    className="px-6 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors flex items-center gap-2"
+                  >
+                    <span className="inline-block w-3 h-3 bg-white rounded-sm" />
+                    Stop Research
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <div className="mt-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
+              {error}
+            </div>
+          )}
+
+          {/* Version Selector */}
+          {selectedProjectId && versions.length > 0 && (
+            <div className="mt-6">
+              <VersionSelector
+                versions={versions}
+                currentVersion={currentVersion}
+                onSelectVersion={(v) => loadVersion(selectedProjectId, v)}
+                onDiff={handleDiff}
+              />
+            </div>
+          )}
+
+          {/* Diff View */}
+          {diffData && (
+            <DiffView v1={diffData.v1} v2={diffData.v2} onClose={() => setDiffData(null)} />
+          )}
+
+          {/* Results Area */}
+          {(subagents.length > 0 || report) && (
+            <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-1 space-y-6">
+                <ProgressTree subagents={subagents} isActive={isResearching} />
+                <SourcesPanel sources={sources} />
+              </div>
+              <div className="lg:col-span-2">
+                <ReportView content={report} isStreaming={isResearching} />
+              </div>
+            </div>
+          )}
+
+          {/* Follow-up Chat — shown after first research completes (project has versions) */}
+          {selectedProjectId && versions.length > 0 && (
+            <div className="mt-8">
+              <FollowUpChat
+                key={`chat-${selectedProjectId}-${currentVersion}`}
+                onRegenerate={handleRegenerate}
+                isRegenerating={isResearching}
+                projectId={selectedProjectId}
+                report={report}
+              />
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }

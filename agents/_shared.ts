@@ -1,32 +1,63 @@
 /**
- * Shared utilities for deep-research agent endpoints.
- * Uses ChatOpenAI directly (avoids initChatModel OPENAI_API_KEY env check).
+ * Shared utilities for deep-research agent (OpenAI Agents SDK).
  */
-import { ChatOpenAI } from "@langchain/openai";
 
-/**
- * Create model instance. Cached per process.
- */
-let cachedModel: ChatOpenAI | null = null;
+// Disable OpenAI Agents tracing (we use EdgeOne's own observability)
+process.env.OPENAI_AGENTS_DISABLE_TRACING = 'true';
 
-export function createModel(): ChatOpenAI {
-  if (cachedModel) return cachedModel;
+import {
+  Agent,
+  run,
+  tool,
+  OpenAIChatCompletionsModel,
+  OpenAIProvider,
+  setDefaultModelProvider,
+  RunItemStreamEvent,
+  RunRawModelStreamEvent,
+} from "@openai/agents";
+import OpenAI from "openai";
 
-  cachedModel = new ChatOpenAI({
-    model: process.env.AI_MODEL || "@Pages/deepseek-v4-flash",
+export {
+  Agent,
+  run,
+  tool,
+  RunItemStreamEvent,
+  RunRawModelStreamEvent,
+};
+
+// ─── Model & Provider ────────────────────────────────────────────────────────
+
+function createOpenAIClient(): OpenAI {
+  return new OpenAI({
     apiKey: process.env.AI_GATEWAY_API_KEY!,
-    configuration: {
-      baseURL: process.env.AI_GATEWAY_BASE_URL!,
+    baseURL: process.env.AI_GATEWAY_BASE_URL!,
+    defaultHeaders: {
+      "X-Gateway-Timeout": "300",
     },
-    timeout: 300_000,
   });
-
-  return cachedModel;
 }
 
-/**
- * Logger with timestamp prefix.
- */
+export function getModel(): OpenAIChatCompletionsModel {
+  const client = createOpenAIClient();
+  return new OpenAIChatCompletionsModel(
+    client,
+    process.env.AI_MODEL || "@Pages/deepseek-v4-flash",
+  );
+}
+
+let providerInitialized = false;
+export function ensureProvider() {
+  if (providerInitialized) return;
+  const client = createOpenAIClient();
+  setDefaultModelProvider(new OpenAIProvider({
+    openAIClient: client,
+    useResponses: false,
+  }));
+  providerInitialized = true;
+}
+
+// ─── Logger ──────────────────────────────────────────────────────────────────
+
 export function createLogger(name: string) {
   return {
     log(...args: unknown[]) {
@@ -38,9 +69,8 @@ export function createLogger(name: string) {
   };
 }
 
-/**
- * Create SSE Response from an async generator.
- */
+// ─── SSE Helpers ─────────────────────────────────────────────────────────────
+
 export function createSSEResponse(
   generator: AsyncGenerator<string>,
   signal?: AbortSignal
@@ -51,9 +81,7 @@ export function createSSEResponse(
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "ping", ts: Date.now() })}\n\n`
-            )
+            encoder.encode(`data: ${JSON.stringify({ type: "ping", ts: Date.now() })}\n\n`)
           );
         } catch {}
       }, 5_000);
@@ -66,12 +94,7 @@ export function createSSEResponse(
         const error = e as Error;
         if (error.name !== "AbortError" && !signal?.aborted) {
           controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: "error_message",
-                content: error.message,
-              })}\n\n`
-            )
+            encoder.encode(`data: ${JSON.stringify({ type: "error_message", content: error.message })}\n\n`)
           );
         }
       } finally {
@@ -93,26 +116,17 @@ export function createSSEResponse(
   });
 }
 
-/**
- * Helper: emit an SSE data line.
- */
 export function sseEvent(data: Record<string, unknown>): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
 
-// ─── Sandbox Utilities ──────────────────────────────────────────────────────
+// ─── Sandbox Utilities ───────────────────────────────────────────────────────
 
 const sandboxLogger = createLogger("sandbox");
 
 /**
  * Process-level mutex for sandbox acquire to avoid "ClientToken already being
- * processed" errors when multiple sub-agents invoke sandbox concurrently.
- *
- * Root cause: each sub-agent context creates a separate LazySandbox with its
- * own InstanceCache, causing duplicate acquire requests for the same
- * conversation. This lock serializes the FIRST sandbox call so that the
- * second sub-agent waits for the first acquire to complete. Once acquired,
- * subsequent calls proceed concurrently (the backend returns the cached instance).
+ * processed" errors when multiple tool calls invoke sandbox concurrently.
  */
 let _sandboxInitialized = false;
 let _sandboxInitLock: Promise<void> | null = null;
@@ -120,7 +134,6 @@ let _sandboxInitLock: Promise<void> | null = null;
 async function ensureSandboxInitialized<T>(fn: () => Promise<T>): Promise<T> {
   if (_sandboxInitialized) return fn();
 
-  // First caller acquires the lock
   if (_sandboxInitLock) {
     await _sandboxInitLock;
     return fn();
@@ -158,13 +171,19 @@ export async function sandboxExec(
         stderr: result?.stderr ?? "",
       };
     }
-  } catch (e) {
-    sandboxLogger.log("sandbox.commands.run failed:", (e as Error).message);
+  } catch (e: any) {
+    if (e?.stdout || e?.stderr || e?.output) {
+      sandboxLogger.log("sandbox.commands.run non-zero exit:", e.message);
+      return {
+        stdout: e.stdout ?? e.output ?? "",
+        stderr: e.stderr ?? "",
+      };
+    }
+    sandboxLogger.log("sandbox.commands.run failed:", e.message);
   }
 
-  // Fallback: call sandbox HTTP API directly via env vars
-  const baseUrl =
-    process.env.SANDBOX_API_BASE || process.env.SANDBOX_BASE_URL;
+  // Fallback: call sandbox HTTP API directly
+  const baseUrl = process.env.SANDBOX_API_BASE || process.env.SANDBOX_BASE_URL;
   const conversationId = context?.conversation_id;
   if (!baseUrl) return null;
 
@@ -175,9 +194,7 @@ export async function sandboxExec(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(conversationId
-          ? { "pages-agent-conversation-id": conversationId }
-          : {}),
+        ...(conversationId ? { "pages-agent-conversation-id": conversationId } : {}),
       },
       body: JSON.stringify({ command, timeout: Math.floor(timeout / 1000) }),
       signal: controller.signal,
@@ -196,7 +213,7 @@ export async function sandboxExec(
 }
 
 /**
- * Fetch a URL: try sandbox curl first, fallback to runtime fetch.
+ * Fetch a URL: race sandbox curl and runtime fetch in parallel.
  * Returns response body text or null on failure.
  */
 export async function safeFetch(
@@ -205,28 +222,59 @@ export async function safeFetch(
   options?: { timeout?: number; headers?: Record<string, string> }
 ): Promise<string | null> {
   const timeout = options?.timeout ?? 15_000;
-  const headerArgs = Object.entries(options?.headers ?? {})
-    .map(([k, v]) => `-H '${k}: ${v}'`)
-    .join(" ");
 
-  // 1) Sandbox curl
-  const curlCmd = `curl -sS --max-time ${Math.floor(timeout / 1000)} ${headerArgs} '${url}'`;
-  const sandboxResult = await sandboxExec(context, curlCmd, timeout + 5_000);
-  if (sandboxResult?.stdout) return sandboxResult.stdout;
+  const sandboxFetch = async (): Promise<string | null> => {
+    const headerArgs = Object.entries(options?.headers ?? {})
+      .map(([k, v]) => `-H '${k}: ${v}'`)
+      .join(" ");
+    const curlCmd = `curl -sS --max-time ${Math.floor(timeout / 1000)} ${headerArgs} '${url}'`;
+    const result = await sandboxExec(context, curlCmd, timeout + 5_000);
+    return result?.stdout || null;
+  };
 
-  // 2) Runtime fetch
-  try {
+  const runtimeFetch = async (): Promise<string | null> => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
-    const res = await fetch(url, {
-      headers: options?.headers,
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    return await res.text();
-  } catch (e) {
-    sandboxLogger.log("runtime fetch failed:", (e as Error).message);
+    try {
+      const res = await fetch(url, {
+        headers: options?.headers,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) return null;
+      return await res.text();
+    } catch {
+      clearTimeout(timer);
+      return null;
+    }
+  };
+
+  const result = await new Promise<{ data: string; source: string } | null>((resolve) => {
+    let settled = false;
+    let pending = 2;
+
+    const tryResolve = (value: string | null, source: string) => {
+      if (settled) return;
+      if (value) {
+        settled = true;
+        resolve({ data: value, source });
+      } else {
+        pending--;
+        if (pending === 0) {
+          settled = true;
+          resolve(null);
+        }
+      }
+    };
+
+    sandboxFetch().then((v) => tryResolve(v, 'sandbox'), () => tryResolve(null, 'sandbox'));
+    runtimeFetch().then((v) => tryResolve(v, 'runtime'), () => tryResolve(null, 'runtime'));
+  });
+
+  if (!result) {
+    sandboxLogger.log("safeFetch: both strategies failed for", url);
     return null;
   }
+  sandboxLogger.log(`safeFetch: winner=${result.source} url=${url.slice(0, 80)}`);
+  return result.data;
 }
