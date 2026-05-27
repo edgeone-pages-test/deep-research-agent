@@ -216,8 +216,24 @@ export async function onRequest(context: any) {
         return json({ success: true, version: newVersion });
       }
 
+      // ─── Save Chat History ────────────────────────────────────────────
+      case 'save_chat': {
+        const { id, messages } = body;
+        if (!id || !Array.isArray(messages)) return json({ error: 'Missing id or messages' }, 400);
+        await store.setJSON(`${id}/chat`, { messages, updatedAt: new Date().toISOString() });
+        return json({ success: true });
+      }
+
+      // ─── Get Chat History ─────────────────────────────────────────────
+      case 'get_chat': {
+        const { id } = body;
+        if (!id) return json({ error: 'Missing id' }, 400);
+        const chatData = await store.get(`${id}/chat`, { type: 'json' }) as any;
+        return json({ messages: chatData?.messages || [] });
+      }
+
       default:
-        return json({ error: 'Unknown action. Use: create, list, get, get_version, diff, delete, save_version' }, 400);
+        return json({ error: 'Unknown action. Use: create, list, get, get_version, diff, delete, save_version, save_chat, get_chat' }, 400);
     }
   } catch (e) {
     logger.error((e as Error).message);

@@ -66,9 +66,49 @@ export function ProjectSelector({
   }
 
   return (
-    <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-3">
-      {/* Project list */}
-      <div className="space-y-1 max-h-64 overflow-y-auto">
+    <div className="flex flex-col h-full">
+      {/* Create new project — always at top */}
+      {isCreating ? (
+        <div className="mb-3 space-y-2.5">
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+            placeholder="输入项目名称..."
+            className="w-full bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 dark:focus:ring-blue-400/40 dark:focus:border-blue-400 dark:text-neutral-100 placeholder:text-neutral-400 transition-all"
+            autoFocus
+          />
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => { setIsCreating(false); setNewName(''); }}
+              className="px-3 py-1.5 rounded-md text-xs font-medium text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleCreate}
+              disabled={!newName.trim()}
+              className="px-4 py-1.5 rounded-md text-xs font-medium text-white bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all"
+            >
+              创建项目
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setIsCreating(true)}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 mb-3 rounded-lg text-sm text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-700 dark:hover:text-neutral-300 border border-dashed border-neutral-300 dark:border-neutral-700 transition-colors flex-shrink-0"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          新建项目
+        </button>
+      )}
+
+      {/* Project list — fills remaining height */}
+      <div className="flex-1 overflow-y-auto space-y-1">
         {projects.map((project) => (
           <div
             key={project.id}
@@ -121,46 +161,6 @@ export function ProjectSelector({
           </div>
         ))}
       </div>
-
-      {/* Create new project */}
-      {isCreating ? (
-        <div className="pt-3 border-t border-neutral-100 dark:border-neutral-800 space-y-2.5">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            placeholder="输入项目名称..."
-            className="w-full bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 dark:focus:ring-blue-400/40 dark:focus:border-blue-400 dark:text-neutral-100 placeholder:text-neutral-400 transition-all"
-            autoFocus
-          />
-          <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={() => { setIsCreating(false); setNewName(''); }}
-              className="px-3 py-1.5 rounded-md text-xs font-medium text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleCreate}
-              disabled={!newName.trim()}
-              className="px-4 py-1.5 rounded-md text-xs font-medium text-white bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all"
-            >
-              创建项目
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={() => setIsCreating(true)}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-700 dark:hover:text-neutral-300 border border-dashed border-neutral-300 dark:border-neutral-700 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          新建项目
-        </button>
-      )}
     </div>
   );
 }

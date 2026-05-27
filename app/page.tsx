@@ -76,6 +76,9 @@ export default function Home() {
   // Sidebar collapsed on mobile
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  // Blob storage availability warning
+  const [blobWarning, setBlobWarning] = useState<string | null>(null);
+
   // Sub-question confirmation state
   const [pendingSubQuestions, setPendingSubQuestions] = useState<string[] | null>(null);
   const [pendingQuestion, setPendingQuestion] = useState('');
@@ -110,6 +113,9 @@ export default function Home() {
       if (res.ok) {
         const { projects: p } = await res.json();
         setProjects(p || []);
+        setBlobWarning(null);
+      } else if (res.status === 503) {
+        setBlobWarning('Blob 存储未配置，项目和聊天记录无法保存。请在 .env 中配置 PROJECT_ID 和 EDGEONE_PAGES_API_TOKEN，或部署到 EdgeOne Makes 平台。');
       }
     } catch {}
   };
@@ -418,6 +424,15 @@ export default function Home() {
                   setPendingSubQuestions(event.subQuestions);
                 }
                 break;
+
+              case 'report_replace':
+                // Structure check cleaned the report — replace displayed content
+                if (event.content) {
+                  synthesizerContent = event.content;
+                  lastReport = event.content;
+                  setReport(event.content);
+                }
+                break;
             }
           } catch {}
         }
@@ -464,8 +479,8 @@ export default function Home() {
   return (
     <div className="min-h-screen flex">
       {/* Left Sidebar — Project List */}
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 transition-all overflow-hidden`}>
-        <div className="w-64 h-screen overflow-y-auto p-4">
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 transition-all overflow-hidden fixed top-0 left-0 h-screen z-20`}>
+        <div className="w-64 h-full flex flex-col p-4">
           <ProjectSelector
             projects={projects}
             selectedProjectId={selectedProjectId}
@@ -475,6 +490,8 @@ export default function Home() {
           />
         </div>
       </aside>
+      {/* Spacer for fixed sidebar */}
+      {sidebarOpen && <div className="w-64 flex-shrink-0" />}
 
       {/* Main Content */}
       <main className="flex-1 min-h-screen overflow-y-auto">
@@ -515,6 +532,21 @@ export default function Home() {
         </header>
 
         <div className="max-w-6xl mx-auto px-6 py-8">
+          {/* Blob storage warning */}
+          {blobWarning && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.27 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <span>{blobWarning}</span>
+              <button onClick={() => setBlobWarning(null)} className="ml-auto p-0.5 hover:bg-amber-200 dark:hover:bg-amber-800 rounded">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           {/* Research Form — hidden once a report is generated */}
           {!report && !pendingSubQuestions && (!selectedProjectId || versions.length === 0) && (
             <>

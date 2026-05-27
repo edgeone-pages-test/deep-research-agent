@@ -13,9 +13,9 @@ const EXAMPLE_PROMPTS = [
 ];
 
 const DEPTH_OPTIONS = [
-  { value: 'quick', labelKey: 'quick' as const, description: '2-3 min' },
-  { value: 'standard', labelKey: 'standard' as const, description: '5-7 min' },
-  { value: 'deep', labelKey: 'deep' as const, description: '10+ min' },
+  { value: 'quick', labelKey: 'quick' as const, description: '' },
+  { value: 'standard', labelKey: 'standard' as const, description: '' },
+  { value: 'deep', labelKey: 'deep' as const, description: '' },
 ];
 
 interface HistoryItem {
@@ -80,7 +80,7 @@ export function ResearchForm({ onSubmit, isLoading, history = [], onLoadReport }
                   disabled={isLoading}
                 >
                   <span>{t[opt.labelKey]}</span>
-                  <span className="ml-1 text-xs text-neutral-400 dark:text-neutral-500">{opt.description}</span>
+                  {opt.description && <span className="ml-1 text-xs text-neutral-400 dark:text-neutral-500">{opt.description}</span>}
                 </button>
               ))}
             </div>

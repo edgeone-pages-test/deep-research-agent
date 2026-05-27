@@ -25,7 +25,7 @@ interface FollowUpChatProps {
   report: string;
 }
 
-export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, report }: FollowUpChatProps) {
+export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projectId, report }: FollowUpChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +35,46 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, report
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isComposingRef = useRef(false);
+  const chatLoaded = useRef(false);
+
+  // Load chat history from Blob on mount
+  useEffect(() => {
+    if (!projectId || chatLoaded.current) return;
+    chatLoaded.current = true;
+    (async () => {
+      try {
+        const res = await fetch('/project', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_chat', id: projectId }),
+        });
+        if (res.ok) {
+          const { messages: saved } = await res.json();
+          if (Array.isArray(saved) && saved.length > 0) {
+            setMessages(saved);
+          }
+        }
+      } catch {}
+    })();
+  }, [projectId]);
+
+  // Save chat history to Blob whenever messages change (debounced)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!projectId || messages.length === 0) return;
+    // Debounce saves to avoid spamming the API
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const toSave = messages.filter(m => !m.isStreaming && m.content);
+      if (toSave.length === 0) return;
+      fetch('/project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_chat', id: projectId, messages: toSave }),
+      }).catch(() => {}); // Silently fail if Blob unavailable
+    }, 2000);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [messages, projectId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -106,10 +146,15 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, report
 
             if (event.type === 'chat_response') {
               fullContent += event.content;
+              // Strip markers from displayed content
+              const displayContent = fullContent
+                .replace(/\[SUGGEST_REGENERATE\]/g, '')
+                .replace(/\[SUGGEST_ADD_SOURCE\]\{[^\n]*\}/g, '')
+                .trimEnd();
               setMessages(prev =>
                 prev.map(m =>
                   m.id === assistantMsg.id
-                    ? { ...m, content: fullContent }
+                    ? { ...m, content: displayContent }
                     : m
                 )
               );

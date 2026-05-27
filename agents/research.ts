@@ -939,13 +939,19 @@ Call the decompose_question tool with your generated sub-questions.`,
 
     const reportLower = report.toLowerCase();
     const hasConclusion = reportLower.includes('## 结论') || reportLower.includes('## conclusion') ||
-      reportLower.includes('## 总结') || reportLower.includes('## summary');
+      reportLower.includes('## 总结');
     const hasReferences = reportLower.includes('## 参考') || reportLower.includes('## references') ||
-      reportLower.includes('## 引用');
+      reportLower.includes('## 引用') || reportLower.includes('参考文献');
 
-    // If the report has BOTH conclusion AND references, it's complete
-    if (hasConclusion && hasReferences) {
+    // Report is complete if it has BOTH conclusion AND references AND is reasonably long
+    if (hasConclusion && hasReferences && report.length > 2000) {
       logger.log(`Report appears complete (len=${report.length}). No continuation needed.`);
+      break;
+    }
+
+    // If report is already very long (>8000 chars), stop regardless to prevent infinite loops
+    if (report.length > 8000) {
+      logger.log(`Report is already ${report.length} chars, stopping continuation to prevent infinite loop.`);
       break;
     }
 
@@ -1000,6 +1006,69 @@ Call the decompose_question tool with your generated sub-questions.`,
     } catch (e: any) {
       logger.log(`Continuation ${attempt + 1} failed: ${e.message}`);
       // Don't break — try again
+    }
+  }
+
+  // ─── Structure Check: fix common issues from multi-continuation ───
+  if (report && report.length > 500) {
+    const originalLen = report.length;
+
+    // 1. Find the FIRST references section and remove everything after it that's a duplicate
+    const refPatterns = [/\n## 参考文献\n/g, /\n## 参考\n/g, /\n## References\n/g, /\n## 引用文献\n/g];
+    let firstRefIndex = -1;
+    let firstRefPattern = '';
+    for (const pattern of refPatterns) {
+      const match = pattern.exec(report);
+      if (match && (firstRefIndex === -1 || match.index < firstRefIndex)) {
+        firstRefIndex = match.index;
+        firstRefPattern = match[0];
+      }
+      pattern.lastIndex = 0; // reset regex
+    }
+
+    if (firstRefIndex > 0) {
+      // Find if there's a SECOND references section (duplicate)
+      const afterFirstRef = report.slice(firstRefIndex + firstRefPattern.length);
+      let secondRefIndex = -1;
+      for (const pattern of refPatterns) {
+        const match = pattern.exec(afterFirstRef);
+        if (match && (secondRefIndex === -1 || match.index < secondRefIndex)) {
+          secondRefIndex = match.index;
+        }
+        pattern.lastIndex = 0;
+      }
+
+      // Also check for duplicate conclusion sections
+      const conclusionPatterns = [/\n## 结论\n/g, /\n## 总结\n/g, /\n## Conclusion\n/g];
+      const reportAfterRef = report.slice(firstRefIndex);
+      let hasDuplicateConclusion = false;
+      for (const pattern of conclusionPatterns) {
+        if (pattern.test(reportAfterRef)) {
+          hasDuplicateConclusion = true;
+        }
+        pattern.lastIndex = 0;
+      }
+
+      if (secondRefIndex > -1 || hasDuplicateConclusion) {
+        // There's duplicate content after the first references section
+        // Keep only the first references section and its content until the duplicate starts
+        if (secondRefIndex > -1) {
+          const cutPoint = firstRefIndex + firstRefPattern.length + secondRefIndex;
+          report = report.slice(0, cutPoint).trimEnd();
+          logger.log(`Structure fix: removed duplicate content after references (cut ${originalLen - report.length} chars)`);
+        }
+      }
+    }
+
+    // 2. If report somehow ends with trailing continuation artifacts, clean them
+    // Remove any trailing "## 结论" or "## 参考文献" headers that have no content after them
+    report = report.replace(/\n## (结论|总结|Conclusion|参考文献|References|引用文献)\s*$/i, '').trimEnd();
+
+    // 3. Notify frontend of the final cleaned report (replace current content)
+    if (report.length !== originalLen) {
+      logger.log(`Structure check: report adjusted from ${originalLen} to ${report.length} chars`);
+      // Send the full cleaned report to replace what's on screen
+      yield sseEvent({ type: 'report_replace', content: report });
     }
   }
 
