@@ -29,6 +29,12 @@ export function ProgressTree({ subagents, isActive }: ProgressTreeProps) {
 
   if (subagents.length === 0 && !isActive) return null;
 
+  // Calculate progress percentage
+  const totalStages = 4; // decomposer, literature, web, synthesizer
+  const completedStages = subagents.filter(s => s.status === 'complete').length;
+  const runningStages = subagents.filter(s => s.status === 'running').length;
+  const progress = Math.round(((completedStages + runningStages * 0.5) / totalStages) * 100);
+
   return (
     <Card>
       <CardHeader>
@@ -40,7 +46,20 @@ export function ProgressTree({ subagents, isActive }: ProgressTreeProps) {
           {isActive && (
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse-dot" />
           )}
+          {isActive && subagents.length > 0 && (
+            <span className="ml-auto text-xs font-normal text-neutral-500 dark:text-neutral-400">
+              {progress}%
+            </span>
+          )}
         </h3>
+        {isActive && subagents.length > 0 && (
+          <div className="mt-2 w-full h-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-700 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         <div className="relative space-y-0">

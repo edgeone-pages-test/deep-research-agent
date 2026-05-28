@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { marked } from 'marked';
 
 interface ChatMessage {
   id: string;
@@ -254,9 +254,7 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projec
               >
                 {msg.content ? (
                   msg.role === 'assistant' ? (
-                    <div className="prose prose-sm dark:prose-invert prose-p:my-1 prose-li:my-0.5 prose-headings:my-2 max-w-none break-words">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    </div>
+                    <div className="prose prose-sm dark:prose-invert prose-p:my-1 prose-li:my-0.5 prose-headings:my-2 max-w-none break-words" dangerouslySetInnerHTML={{ __html: marked.parse(msg.content) as string }} />
                   ) : (
                     <div className="whitespace-pre-wrap break-words">{msg.content}</div>
                   )

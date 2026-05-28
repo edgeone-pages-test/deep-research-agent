@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { marked } from 'marked';
+
+marked.setOptions({ gfm: true, breaks: true });
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
@@ -104,9 +105,7 @@ export function ReportView({ content, isStreaming }: ReportViewProps) {
             </div>
           )}
           {content && (
-            <div className="prose-research max-w-prose">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-            </div>
+            <div className="prose-research max-w-prose" dangerouslySetInnerHTML={{ __html: marked.parse(content) as string }} />
           )}
         </div>
 
