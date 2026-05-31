@@ -28,8 +28,24 @@ export const translations = {
     web: '网页',
     generatingReport: '生成报告中...',
     copy: '复制',
+    copied: '已复制！',
     download: '下载',
     history: '历史',
+    stopResearch: '停止研究',
+    // Agent stage labels
+    decomposingQuestion: '分解问题',
+    searchingLiterature: '搜索学术文献',
+    searchingWeb: '搜索网络',
+    synthesizingReport: '生成报告',
+    subQuestionCount: '{n} 个子问题',
+    // Example prompts
+    examplePrompts: [
+      '量子计算的最新进展及其实际应用是什么？',
+      'AI 如何改变药物发现和蛋白质结构预测？',
+      '训练大型语言模型对环境有哪些影响？',
+      '比较不同 AI 对齐方法的有效性',
+      '核聚变能源研究的现状如何？',
+    ] as string[],
     // Project management
     projects: '研究项目',
     newProject: '新建项目',
@@ -48,6 +64,13 @@ export const translations = {
     // Follow-up
     followUpPlaceholder: '继续研究：追问、深入某个方向、或粘贴URL添加语料...',
     continueResearch: '继续研究',
+    continueResearchSubtitle: '追问、补充信息、或要求修改报告',
+    chatInputPlaceholder: '追问报告内容、粘贴URL补充信息、或要求修改报告...',
+    regenerateReport: '重新生成报告',
+    suggestedSources: '是否添加以下文献到论文列表？',
+    addSourceBtn: '添加',
+    ignoreBtn: '忽略',
+    regeneratingReport: '正在重新生成报告...',
     urlDetected: '检测到URL，将自动抓取内容',
     // Diff
     diffTitle: '版本对比',
@@ -79,8 +102,24 @@ export const translations = {
     web: 'Web',
     generatingReport: 'Generating report...',
     copy: 'Copy',
+    copied: 'Copied!',
     download: 'Download',
     history: 'History',
+    stopResearch: 'Stop Research',
+    // Agent stage labels
+    decomposingQuestion: 'Decomposing Question',
+    searchingLiterature: 'Searching Literature',
+    searchingWeb: 'Searching Web',
+    synthesizingReport: 'Synthesizing Report',
+    subQuestionCount: '{n} sub-questions',
+    // Example prompts
+    examplePrompts: [
+      'What are the latest advances in quantum computing and their practical applications?',
+      'How is AI transforming drug discovery and protein structure prediction?',
+      'What are the environmental impacts of large language model training?',
+      'Compare the effectiveness of different approaches to AI alignment',
+      'What is the current state of nuclear fusion energy research?',
+    ] as string[],
     // Project management
     projects: 'Projects',
     newProject: 'New Project',
@@ -99,6 +138,13 @@ export const translations = {
     // Follow-up
     followUpPlaceholder: 'Continue research: ask follow-up questions, explore a direction, or paste URLs...',
     continueResearch: 'Continue',
+    continueResearchSubtitle: 'Ask follow-ups, add context, or request report changes',
+    chatInputPlaceholder: 'Ask follow-up questions, paste URLs, or request report changes...',
+    regenerateReport: 'Regenerate Report',
+    suggestedSources: 'Add these sources to your source list?',
+    addSourceBtn: 'Add',
+    ignoreBtn: 'Ignore',
+    regeneratingReport: 'Regenerating report...',
     urlDetected: 'URL detected — content will be scraped',
     // Diff
     diffTitle: 'Version Comparison',

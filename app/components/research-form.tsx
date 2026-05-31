@@ -4,14 +4,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 
-const EXAMPLE_PROMPTS = [
-  'What are the latest advances in quantum computing and their practical applications?',
-  'How is AI transforming drug discovery and protein structure prediction?',
-  'What are the environmental impacts of large language model training?',
-  'Compare the effectiveness of different approaches to AI alignment',
-  'What is the current state of nuclear fusion energy research?',
-];
-
 const DEPTH_OPTIONS = [
   { value: 'quick', labelKey: 'quick' as const, description: '' },
   { value: 'standard', labelKey: 'standard' as const, description: '' },
@@ -37,6 +29,7 @@ export function ResearchForm({ onSubmit, isLoading, history = [], onLoadReport }
   const [question, setQuestion] = useState('');
   const [depth, setDepth] = useState('standard');
   const [showHistory, setShowHistory] = useState(false);
+  const examplePrompts = t.examplePrompts;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +145,7 @@ export function ResearchForm({ onSubmit, isLoading, history = [], onLoadReport }
             {t.tryExample}
           </p>
           <div className="flex flex-wrap gap-2">
-            {EXAMPLE_PROMPTS.map((prompt, i) => (
+            {examplePrompts.map((prompt, i) => (
               <button
                 key={i}
                 onClick={() => setQuestion(prompt)}

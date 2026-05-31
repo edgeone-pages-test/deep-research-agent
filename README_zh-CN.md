@@ -1,6 +1,6 @@
 # 深度研究 Agent
 
-基于 EdgeOne Makes 平台的多智能体深度研究助手。支持人机协作确认子问题、实时网页与学术搜索、自动续写报告生成、项目版本管理。
+基于 EdgeOne Makers 平台的多智能体深度研究助手。支持人机协作确认子问题、实时网页与学术搜索、自动续写报告生成、项目版本管理。
 
 ## 功能特性
 
@@ -27,7 +27,7 @@
 | 样式 | Tailwind CSS |
 | Agent 框架 | OpenAI Agents SDK (`@openai/agents`) |
 | 大模型 | `@makers/deepseek-v4-flash`（写死）通过 EdgeOne AI Gateway |
-| 平台 | EdgeOne Makes（云函数、Blob 存储、沙箱、Tools） |
+| 平台 | EdgeOne Makers（云函数、Blob 存储、沙箱、Tools） |
 | 网页搜索 | `context.tools.get('web_search')` 内置工具 |
 | Markdown 渲染 | react-markdown + remark-gfm（表格、删除线） |
 
@@ -75,7 +75,7 @@
 11. 用户通过 FollowUpChat 继续研究（聊天记录持久化到 Blob）
 ```
 
-## 使用的 EdgeOne Makes 平台能力
+## 使用的 EdgeOne Makers 平台能力
 
 | 能力 | 用途 |
 |------|------|

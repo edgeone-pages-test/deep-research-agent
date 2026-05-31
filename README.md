@@ -1,6 +1,6 @@
 # Deep Research Agent
 
-Multi-agent powered deep research assistant built on EdgeOne Makes platform. Features human-in-the-loop sub-question confirmation, real-time web & academic search, iterative report generation with auto-continuation, and project-based version management.
+Multi-agent powered deep research assistant built on EdgeOne Makers platform. Features human-in-the-loop sub-question confirmation, real-time web & academic search, iterative report generation with auto-continuation, and project-based version management.
 
 ## Features
 
@@ -27,7 +27,7 @@ Multi-agent powered deep research assistant built on EdgeOne Makes platform. Fea
 | Styling | Tailwind CSS |
 | Agent Framework | OpenAI Agents SDK (`@openai/agents`) |
 | LLM | `@makers/deepseek-v4-flash` (hardcoded) via EdgeOne AI Gateway |
-| Platform | EdgeOne Makes (Cloud Functions, Blob Storage, Sandbox, Tools) |
+| Platform | EdgeOne Makers (Cloud Functions, Blob Storage, Sandbox, Tools) |
 | Web Search | `context.tools.get('web_search')` built-in tool |
 | Markdown | react-markdown + remark-gfm (tables, strikethrough) |
 
@@ -75,7 +75,7 @@ Multi-agent powered deep research assistant built on EdgeOne Makes platform. Fea
 11. User can continue research via FollowUpChat (chat persisted to Blob)
 ```
 
-## EdgeOne Makes Platform Features Used
+## EdgeOne Makers Platform Features Used
 
 | Feature | Usage |
 |---------|-------|

@@ -419,7 +419,7 @@ const decomposeQuestion = tool({
     depth: z.enum(["quick", "standard", "deep"]).describe("Research depth: quick (2-3 sub-questions), standard (3-5), deep (5-7)"),
     subQuestions: z.array(z.string()).describe("The sub-questions YOU generated. Cover: background, current state, challenges, future directions. Write in same language as question."),
   }),
-  execute: async ({ question, depth, subQuestions }) => {
+  execute: async ({ question, subQuestions }) => {
     // The agent generates sub-questions via the parameters — no extra LLM call needed
     if (Array.isArray(subQuestions) && subQuestions.length > 0) {
       return JSON.stringify({ subQuestions });
@@ -566,7 +566,6 @@ interface ResearchOptions {
   projectId?: string;
   urls?: string[];
   previousReport?: string;
-  previousSources?: string;
   isFollowUp?: boolean;
   confirmedSubQuestions?: string[];
   decomposeOnly?: boolean;
@@ -624,12 +623,24 @@ ${hasConfirmedQuestions ? `\n## Pre-confirmed Sub-questions:\n${confirmedSubQues
 - Markdown with ## for main sections, ### for subsections
 - Use GFM tables (| header | header |) when presenting comparative data
 - Inline citations like [1], [2] referencing sources
-- Structure: Executive Summary → Key Findings → Analysis → Conclusion → References
 - Academic but accessible tone
 - Write in the same language as the original research question
 - Section headings: use clean names like "## 结论" or "## 参考文献" — do NOT use slash-combined names like "结论/总结" or "参考文献/References"
+
+## MANDATORY Report Structure (follow exactly in this order):
+1. **## 序言** (or ## Introduction for English) — background, context, research objectives
+2. **## 一、[Topic Chapter]** … **## N、[Topic Chapter]** — the main body chapters (AI decides titles and count based on depth)
+3. **## 结论** (or ## Conclusion for English) — summary of key findings, takeaways
+4. **## 参考文献** (or ## References for English) — ALL citations, numbered [1]–[N]. This is the ONLY references section in the entire report. NO supplementary references elsewhere.
+5. **## 附录** (or ## Appendix for English) — OPTIONAL. Include only if there are data tables or charts to present. The appendix must NOT contain any reference list or citation section.
+
+## CRITICAL Structure Rules:
+- The report MUST end with ## 参考文献 (or ## References). Nothing comes after it except optionally ## 附录.
+- There must be EXACTLY ONE references section. NEVER create "参考文献（补充）", "补充参考文献", "Additional References", or any secondary citation list.
+- ALL inline citations [1]–[N] must resolve to entries in the single ## 参考文献 section.
+- If an appendix is included, it may only contain tables, charts, or supplementary data — no citation lists.
 - References section: list cited sources concisely (author, title, year only — NO full URLs)
-- CRITICAL: You MUST write the COMPLETE report. Do NOT stop mid-sentence or mid-section. If the report is long, continue writing until all sections are complete including the References section.`;
+- CRITICAL: You MUST write the COMPLETE report. Do NOT stop mid-sentence or mid-section. Write all sections through ## 参考文献 before stopping.`;
 
   if (isFollowUp && previousReport) {
     prompt += `
@@ -653,6 +664,141 @@ ${previousReport}`;
   return prompt;
 }
 
+// ─── Follow-up Editing Flow ───────────────────────────────────────────────────
+// Lightweight path used when isFollowUp=true: skips decompose/search, edits
+// the previous report directly with a no-tool agent.
+
+async function* streamFollowUpEdit(
+  modificationRequest: string,
+  previousReport: string,
+  opts: ResearchOptions,
+  context: any,
+  signal?: AbortSignal
+): AsyncGenerator<string> {
+  const { depth, projectId } = opts;
+  const conversationId = context.conversation_id || "default";
+  const session = context.store?.openaiSession?.(conversationId);
+
+  // Show only the synthesizer stage (editing = synthesis without search)
+  yield sseEvent({ type: 'subagent_lifecycle', status: 'running', agent: 'synthesizer', id: 'stage-4' });
+  yield sseEvent({ type: 'progress', step: 1, total: 1, label: 'Editing report...' });
+
+  const editorAgent = new Agent({
+    name: "report-editor",
+    instructions: `You are a precise research report editor.
+
+## Your Task:
+Edit the provided research report according to the user's modification request.
+
+## CRITICAL RULES:
+- PRESERVE all existing content that is not explicitly requested to change
+- Only MODIFY / ADD / REMOVE exactly what the user requests
+- Output the COMPLETE updated report — all original content with your modifications seamlessly integrated
+- Maintain the same writing style, citation format, citation numbering, and language as the original report
+- Do NOT prefix with any meta-commentary like "以下是更新后的报告" or "Here is the updated report" — start directly from the first heading
+- Do NOT explain what you changed — just output the finished report
+- If user asks to add a chapter: insert it in the logically appropriate position within the existing structure, BEFORE ## 结论
+- If user asks to update a section: rewrite only that section, keep everything else verbatim
+- If user asks to remove content: remove it and ensure surrounding text still flows naturally
+
+## MANDATORY Structure Rules (preserve in all edits):
+- The report must follow: ## 序言 → numbered body chapters → ## 结论 → ## 参考文献 → ## 附录 (optional)
+- There must be EXACTLY ONE ## 参考文献 (or ## References) section — never create "参考文献（补充）" or any secondary citation list
+- All citations [1]–[N] must resolve to entries in the single ## 参考文献 section
+- The ## 附录 section must NOT contain any reference list`,
+    model: getModel(),
+    tools: [],
+    modelSettings: { maxTokens: 65536 },
+  });
+
+  const input = [{
+    role: "user" as const,
+    content: `## Modification Request:\n${modificationRequest}\n\n## Report to Edit:\n${previousReport}`,
+  }];
+
+  let report = '';
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+
+  try {
+    const result = await run(editorAgent, input as any, {
+      stream: true,
+      signal,
+      maxTurns: 3,
+      modelSettings: { maxTokens: 65536 },
+      ...(session ? { session } : {}),
+    });
+
+    for await (const event of result) {
+      if (signal?.aborted) break;
+
+      if (event.type === "raw_model_stream_event") {
+        const data = (event as any).data;
+        if (data?.type === 'output_text_delta' && data.delta) {
+          const text = data.delta;
+          if (!text.includes('<think>') && !text.includes('</think>')) {
+            report += text;
+            yield sseEvent({ type: 'ai_response', content: text, agent: 'synthesizer' });
+          }
+        }
+      } else if (event.type === "run_item_stream_event") {
+        const item = event.item as any;
+        if (item.rawItem?.usage) {
+          totalInputTokens += item.rawItem.usage.input_tokens || 0;
+          totalOutputTokens += item.rawItem.usage.output_tokens || 0;
+        }
+      }
+    }
+    await result.completed;
+
+    // Fallback: non-streaming output
+    if (!report) {
+      const output = result.finalOutput;
+      if (typeof output === 'string' && output) {
+        report = output.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        yield sseEvent({ type: 'ai_response', content: report, agent: 'synthesizer' });
+      }
+    }
+  } catch (e: any) {
+    if (e.name !== 'AbortError' && !signal?.aborted) {
+      logger.error('Follow-up edit error:', e.message);
+      yield sseEvent({ type: 'error_message', content: e.message });
+    }
+  }
+
+  if (report) {
+    yield sseEvent({ type: 'subagent_lifecycle', status: 'complete', agent: 'synthesizer', id: 'stage-4' });
+    if (totalInputTokens > 0 || totalOutputTokens > 0) {
+      yield sseEvent({ type: 'token_usage', input: totalInputTokens, output: totalOutputTokens });
+    }
+
+    // Save versioned copy to project
+    if (projectId) {
+      try {
+        const versionData = {
+          question: modificationRequest,
+          depth,
+          subQuestions: [],
+          papers: [],
+          articles: [],
+          scrapedUrls: [],
+          report,
+          trigger: 'follow-up',
+        };
+        if (context.agents?.invoke) {
+          await context.agents.invoke('/project', { action: 'save_version', id: projectId, versionData });
+          logger.log(`Saved follow-up edit version to project ${projectId}`);
+        }
+      } catch (e) {
+        logger.log('Project version save failed (follow-up):', (e as Error).message);
+      }
+    }
+  }
+
+  yield sseEvent({ type: 'research_complete', sources: [] });
+  yield "data: [DONE]\n\n";
+}
+
 async function* streamResearch(
   question: string,
   opts: ResearchOptions,
@@ -665,16 +811,13 @@ async function* streamResearch(
   const { depth, projectId, urls, previousReport, isFollowUp, confirmedSubQuestions, decomposeOnly } = opts;
   const conversationId = context.conversation_id || "default";
 
-  // Save user message to memory
-  if (context.store) {
-    try {
-      await context.store.appendMessage({
-        conversationId,
-        role: 'user',
-        content: question,
-        metadata: { depth, projectId },
-      });
-    } catch {}
+  // Create OpenAI Agents SDK session for conversation history persistence
+  const session = context.store?.openaiSession?.(conversationId);
+
+  // ─── Follow-up editing mode: skip search, edit existing report directly ───
+  if (isFollowUp && previousReport) {
+    yield* streamFollowUpEdit(question, previousReport, opts, context, signal);
+    return;
   }
 
   // ─── DecomposeOnly mode: just generate sub-questions and return ───
@@ -700,6 +843,7 @@ Call the decompose_question tool with your generated sub-questions.`,
     try {
       const result = await run(decomposeAgent, [{ role: "user", content: question }] as any, {
         stream: true, signal, maxTurns: 10, modelSettings: { maxTokens: 4096 },
+        ...(session ? { session } : {}),
       });
 
       let subQs: string[] = [];
@@ -779,10 +923,9 @@ Call the decompose_question tool with your generated sub-questions.`,
 
   try {
     // maxTurns: 15 allows tool calls + long report generation
-    const result = await run(agent, input as any, { stream: true, signal, maxTurns: 15, modelSettings: { maxTokens: 65536 } });
+    const result = await run(agent, input as any, { stream: true, signal, maxTurns: 15, modelSettings: { maxTokens: 65536 }, ...(session ? { session } : {}) });
 
     let synthesizing = false;
-    let toolCallsSeen = false;  // Track if any tool calls have been made
     let allToolsDone = false;   // Track if all tool outputs received
 
     for await (const event of result) {
@@ -794,7 +937,6 @@ Call the decompose_question tool with your generated sub-questions.`,
         if (item.type === "tool_call_item") {
           const raw = item.rawItem;
           const toolName = raw?.name || "tool";
-          toolCallsSeen = true;
           allToolsDone = false;  // New tool call starting, not done yet
           // If we were accumulating pre-tool-call text, discard it
           if (synthesizing) {
@@ -960,7 +1102,7 @@ Call the decompose_question tool with your generated sub-questions.`,
     try {
       const continueAgent = new Agent({
         name: "report-continuator",
-        instructions: `You are continuing an incomplete research report. The previous output was cut short. Continue writing from EXACTLY where it left off — do NOT add any prefix, greeting, or "continued from" note. Do NOT repeat any content that already exists. Complete ALL remaining sections. The report MUST end with a "## 结论" (or "## Conclusion") section AND a "## 参考文献" (or "## References") section. Do NOT use "结论/总结" or "参考文献/参考文献" — pick ONE name for each section heading. Write in the same language as the existing content. Output ONLY the continuation text. Write as MUCH content as possible — aim for at least 2000 characters.`,
+        instructions: `You are continuing an incomplete research report. The previous output was cut short. Continue writing from EXACTLY where it left off — do NOT add any prefix, greeting, or "continued from" note. Do NOT repeat any content that already exists. Complete ALL remaining sections following this exact structure: main body chapters → ## 结论 (or ## Conclusion) → ## 参考文献 (or ## References). Do NOT use "结论/总结" or slash-combined heading names. CRITICAL: There must be EXACTLY ONE references section in the entire report — never create "参考文献（补充）", "Additional References", or any secondary citation list. The appendix (## 附录) is optional and must NOT contain a citation list. Write in the same language as the existing content. Output ONLY the continuation text. Write as MUCH content as possible — aim for at least 2000 characters.`,
         model: getModel(),
         tools: [],
         modelSettings: { maxTokens: 65536 },
@@ -1013,6 +1155,12 @@ Call the decompose_question tool with your generated sub-questions.`,
   if (report && report.length > 500) {
     const originalLen = report.length;
 
+    // 0. Strip any supplementary reference sections inside appendix
+    //    e.g. "参考文献（补充）", "补充参考文献", "Additional References", "参考文献\n" that appear AFTER the first references section
+    report = report
+      .replace(/\n###?\s*(参考文献（补充）|补充参考文献|Additional References?|参考文献补充)[^\n]*\n[\s\S]*?(?=\n##|\s*$)/gi, '')
+      .trimEnd();
+
     // 1. Find the FIRST references section and remove everything after it that's a duplicate
     const refPatterns = [/\n## 参考文献\n/g, /\n## 参考\n/g, /\n## References\n/g, /\n## 引用文献\n/g];
     let firstRefIndex = -1;
@@ -1058,6 +1206,22 @@ Call the decompose_question tool with your generated sub-questions.`,
           logger.log(`Structure fix: removed duplicate content after references (cut ${originalLen - report.length} chars)`);
         }
       }
+
+      // Remove any citation sub-section inside ## 附录 (after the first references section)
+      const appendixMatch = /\n## 附录[\s\S]*$/.exec(report);
+      if (appendixMatch) {
+        const appendixStart = appendixMatch.index;
+        const appendixContent = appendixMatch[0];
+        // Strip any ### sub-heading that looks like a reference list inside appendix
+        const cleanedAppendix = appendixContent.replace(
+          /\n###?\s*(参考文献|References?|引用|补充参考)[^\n]*\n[\s\S]*/gi,
+          ''
+        );
+        if (cleanedAppendix !== appendixContent) {
+          report = report.slice(0, appendixStart) + cleanedAppendix;
+          logger.log(`Structure fix: removed citation list inside appendix`);
+        }
+      }
     }
 
     // 2. If report somehow ends with trailing continuation artifacts, clean them
@@ -1075,18 +1239,6 @@ Call the decompose_question tool with your generated sub-questions.`,
   // Mark synthesizer as complete (only once, after any continuation)
   if (report) {
     yield sseEvent({ type: 'subagent_lifecycle', status: 'complete', agent: 'synthesizer', id: 'stage-4' });
-  }
-
-  // Persist report (even partial) to Memory + Blob/Project
-  if (context.store && report) {
-    try {
-      await context.store.appendMessage({
-        conversationId,
-        role: 'assistant',
-        content: report,
-        metadata: { type: 'research_report', projectId },
-      });
-    } catch {}
   }
 
   // Save to project (versioned) or standalone blob

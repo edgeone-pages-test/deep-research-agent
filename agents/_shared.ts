@@ -12,8 +12,6 @@ import {
   OpenAIChatCompletionsModel,
   OpenAIProvider,
   setDefaultModelProvider,
-  RunItemStreamEvent,
-  RunRawModelStreamEvent,
 } from "@openai/agents";
 import OpenAI from "openai";
 
@@ -21,8 +19,6 @@ export {
   Agent,
   run,
   tool,
-  RunItemStreamEvent,
-  RunRawModelStreamEvent,
 };
 
 // ─── Model & Provider ────────────────────────────────────────────────────────
@@ -155,7 +151,7 @@ async function ensureSandboxInitialized<T>(fn: () => Promise<T>): Promise<T> {
  * Execute a shell command in the remote sandbox.
  * Returns { stdout, stderr } or null if sandbox unavailable.
  */
-export async function sandboxExec(
+async function sandboxExec(
   context: any,
   command: string,
   timeout = 30_000

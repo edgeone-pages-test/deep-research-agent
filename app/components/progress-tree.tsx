@@ -5,13 +5,6 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
 import type { SubagentEvent } from '../page';
 
-const AGENT_LABELS: Record<string, string> = {
-  'question-decomposer': 'Decomposing Question',
-  'literature-searcher': 'Searching Literature',
-  'web-researcher': 'Searching Web',
-  'synthesizer': 'Synthesizing Report',
-};
-
 const AGENT_ICONS: Record<string, string> = {
   'question-decomposer': 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
   'literature-searcher': 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253',
@@ -26,6 +19,13 @@ interface ProgressTreeProps {
 
 export function ProgressTree({ subagents, isActive }: ProgressTreeProps) {
   const { t } = useI18n();
+
+  const AGENT_LABELS: Record<string, string> = {
+    'question-decomposer': t.decomposingQuestion,
+    'literature-searcher': t.searchingLiterature,
+    'web-researcher': t.searchingWeb,
+    'synthesizer': t.synthesizingReport,
+  };
 
   if (subagents.length === 0 && !isActive) return null;
 
@@ -139,6 +139,7 @@ export function ProgressTree({ subagents, isActive }: ProgressTreeProps) {
 // Collapsible sub-question list to avoid taking too much space
 function SubQuestionList({ questions }: { questions: string[] }) {
   const [expanded, setExpanded] = useState(false);
+  const { t } = useI18n();
 
   return (
     <div className="mt-1.5">
@@ -149,7 +150,7 @@ function SubQuestionList({ questions }: { questions: string[] }) {
         <svg className={`w-3 h-3 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
-        {questions.length} 个子问题
+        {t.subQuestionCount.replace('{n}', String(questions.length))}
       </button>
       {expanded && (
         <ul className="mt-1.5 ml-1 space-y-1 border-l-2 border-neutral-200 dark:border-neutral-700 pl-2.5 max-h-48 overflow-y-auto">

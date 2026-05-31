@@ -115,7 +115,7 @@ export default function Home() {
         setProjects(p || []);
         setBlobWarning(null);
       } else if (res.status === 503) {
-        setBlobWarning('Blob 存储未配置，项目和聊天记录无法保存。请在 .env 中配置 PROJECT_ID 和 EDGEONE_PAGES_API_TOKEN，或部署到 EdgeOne Makes 平台。');
+        setBlobWarning('Blob 存储未配置，项目和聊天记录无法保存。请在 .env 中配置 PROJECT_ID 和 EDGEONE_PAGES_API_TOKEN，或部署到 EdgeOne Makers 平台。');
       }
     } catch {}
   };
@@ -467,8 +467,13 @@ export default function Home() {
             }),
           });
         } catch {}
-        // Reload versions immediately after save
-        await loadProjectVersions(selectedProjectId);
+        // Reload versions after save; retry once if count hasn't increased
+        const prevCount = versions.length;
+        const newCount = await loadProjectVersions(selectedProjectId);
+        if (newCount <= prevCount) {
+          await new Promise(r => setTimeout(r, 2000));
+          await loadProjectVersions(selectedProjectId);
+        }
         await loadProjects();
       }
     }
@@ -547,10 +552,10 @@ export default function Home() {
             </div>
           )}
 
-          {/* Research Form — hidden once a report is generated */}
-          {!report && !pendingSubQuestions && (!selectedProjectId || versions.length === 0) && (
+          {/* Research Form — hidden once a report is generated or research is running */}
+          {!report && !pendingSubQuestions && !isResearching && (!selectedProjectId || versions.length === 0) && (
             <>
-              {selectedProjectId && versions.length === 0 && !isResearching && (
+              {selectedProjectId && versions.length === 0 && (
                 <div className="mb-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-sm flex items-center gap-3">
                   <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -559,18 +564,20 @@ export default function Home() {
                 </div>
               )}
               <ResearchForm key={selectedProjectId || '__none__'} onSubmit={handleResearch} isLoading={isResearching} />
-              {isResearching && (
-                <div className="mt-4 flex justify-center">
-                  <button
-                    onClick={handleStop}
-                    className="px-6 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors flex items-center gap-2"
-                  >
-                    <span className="inline-block w-3 h-3 bg-white rounded-sm" />
-                    Stop Research
-                  </button>
-                </div>
-              )}
             </>
+          )}
+
+          {/* Stop Button — shown whenever research is running */}
+          {isResearching && !pendingSubQuestions && (
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={handleStop}
+                className="px-6 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <span className="inline-block w-3 h-3 bg-white rounded-sm" />
+                {t.stopResearch}
+              </button>
+            </div>
           )}
 
           {/* Sub-question Confirmation UI */}

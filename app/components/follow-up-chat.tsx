@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { marked } from 'marked';
+import { useI18n } from '@/lib/i18n';
 
 interface ChatMessage {
   id: string;
@@ -26,6 +27,7 @@ interface FollowUpChatProps {
 }
 
 export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projectId, report }: FollowUpChatProps) {
+  const { t } = useI18n();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -229,10 +231,10 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projec
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
           <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-            继续研究
+            {t.continueResearch}
           </span>
           <span className="text-xs text-neutral-400 dark:text-neutral-500">
-            追问、补充信息、或要求修改报告
+            {t.continueResearchSubtitle}
           </span>
         </div>
       </div>
@@ -282,7 +284,7 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projec
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            重新生成报告
+            {t.regenerateReport}
             {regenerateSuggestion && (
               <span className="opacity-75 ml-1">— {regenerateSuggestion.slice(0, 30)}{regenerateSuggestion.length > 30 ? '...' : ''}</span>
             )}
@@ -293,7 +295,7 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projec
       {/* Suggested Sources — ask user to add to left panel */}
       {suggestedSources.length > 0 && onAddSource && (
         <div className="mx-4 mb-3 space-y-2">
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">是否添加以下文献到论文列表？</p>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{t.suggestedSources}</p>
           {suggestedSources.map((source, i) => (
             <div
               key={i}
@@ -312,7 +314,7 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projec
                 }}
                 className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium transition-colors"
               >
-                添加
+                {t.addSourceBtn}
               </button>
               <button
                 onClick={() => {
@@ -320,7 +322,7 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projec
                 }}
                 className="flex-shrink-0 px-2 py-1.5 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-500 text-xs transition-colors"
               >
-                忽略
+                {t.ignoreBtn}
               </button>
             </div>
           ))}
@@ -334,7 +336,7 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projec
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          正在重新生成报告...
+          {t.regeneratingReport}
         </div>
       )}
 
@@ -348,7 +350,7 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projec
             onKeyDown={handleKeyDown}
             onCompositionStart={() => { isComposingRef.current = true; }}
             onCompositionEnd={() => { isComposingRef.current = false; }}
-            placeholder="追问报告内容、粘贴URL补充信息、或要求修改报告..."
+            placeholder={t.chatInputPlaceholder}
             className="flex-1 min-h-[44px] max-h-32 px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 text-sm text-neutral-800 dark:text-neutral-200 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 resize-none transition-all"
             disabled={isLoading || isRegenerating}
             rows={1}
