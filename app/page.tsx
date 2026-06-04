@@ -326,7 +326,7 @@ export default function Home() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "pages-agent-conversation-id": conversationId,
+        "makers-conversation-id": conversationId,
       },
       body: JSON.stringify({ conversationId }),
     }).catch(() => {});
@@ -461,7 +461,7 @@ export default function Home() {
     try {
       const response = await fetch('/research', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'pages-agent-conversation-id': conversationId },
+        headers: { 'Content-Type': 'application/json', 'makers-conversation-id': conversationId },
         body: JSON.stringify(body),
         signal: abortControllerRef.current.signal,
       });

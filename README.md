@@ -27,8 +27,6 @@ This template automates rigorous, citation-backed research reports. It decompose
 |----------|----------|-------------|
 | `AI_GATEWAY_API_KEY` | Yes | Model gateway API key. Use your Makers Models API Key, or any OpenAI-compatible provider key. |
 | `AI_GATEWAY_BASE_URL` | Yes | Gateway base URL. For Makers Models, use `https://ai-gateway.edgeone.link/v1`. |
-| `AI_GATEWAY_MODEL` | No | Model ID. The template hardcodes `@makers/deepseek-v4-flash`. |
-| `SANDBOX_API_BASE` | No | Sandbox HTTP API base URL, used as a fallback for web fetching. |
 
 This template follows the OpenAI-compatible standard — point these at Makers Models or any compatible provider.
 

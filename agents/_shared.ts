@@ -190,7 +190,7 @@ async function sandboxExec(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(conversationId ? { "pages-agent-conversation-id": conversationId } : {}),
+        ...(conversationId ? { "makers-conversation-id": conversationId } : {}),
       },
       body: JSON.stringify({ command, timeout: Math.floor(timeout / 1000) }),
       signal: controller.signal,
