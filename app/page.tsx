@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ResearchForm } from './components/research-form';
 import { ProgressTree } from './components/progress-tree';
 import { SourcesPanel } from './components/sources-panel';
@@ -67,7 +67,11 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [tokenUsage, setTokenUsage] = useState({ input: 0, output: 0 });
   const abortControllerRef = useRef<AbortController | null>(null);
-  const conversationId = useMemo(() => crypto.randomUUID(), []);
+  // Synchronous re-entry guard. The submit button is disabled via `isResearching`,
+  // but a rapid double-click within the same render frame can fire twice before
+  // React re-renders and disables it. This ref flips synchronously so the second
+  // call bails immediately. Released in streamResearch's finally.
+  const busyRef = useRef(false);
 
   // Project state
   const [projects, setProjects] = useState<Project[]>([]);
@@ -83,7 +87,25 @@ export default function Home() {
   // gets immediate feedback on switch.
   const [loadingVersion, setLoadingVersion] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  // Pending action that would interrupt an active research run (non-null = the
+  // confirmation modal is open). Covers both "create new project" and "switch
+  // to another project" — both must abort the in-flight AI request on confirm.
+  const [pendingInterrupt, setPendingInterrupt] = useState<
+    | { type: 'create'; name: string }
+    | { type: 'switch'; projectId: string }
+    | null
+  >(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  // Conversation identity is **per project**, not per page. The backend keys
+  // its OpenAI Agents session (research history) by conversationId; a single
+  // page-lifetime id would make every project share one session, so a new
+  // project would inherit the previous project's research context and produce
+  // identical/contaminated output. We therefore use the projectId itself as
+  // the conversation key once a project is selected, and a stable fallback id
+  // only for the brief standalone window before any project exists.
+  const standaloneConvIdRef = useRef<string>(crypto.randomUUID());
+  const conversationId = selectedProjectId ?? standaloneConvIdRef.current;
   const [versions, setVersions] = useState<VersionInfo[]>([]);
   const [currentVersion, setCurrentVersion] = useState<number | null>(null);
 
@@ -250,7 +272,9 @@ export default function Home() {
     }
   };
 
-  // Shared helper: creates a project, updates state, and returns the new project id
+  // Shared helper: creates a project, updates state, and returns the new project id.
+  // Kept side-effect-pure w.r.t. research state — it is also called from the
+  // auto-create path inside handleResearch, where isResearching must stay true.
   const createProject = async (name: string): Promise<string | null> => {
     setCreatingProject(true);
     try {
@@ -283,7 +307,50 @@ export default function Home() {
   };
 
   const handleCreateProject = async (name: string) => {
+    // If a research run is active, don't silently interrupt it — ask the user
+    // to confirm first. The actual abort+create happens in confirmInterrupt.
+    if (isResearching || busyRef.current) {
+      setPendingInterrupt({ type: 'create', name });
+      return;
+    }
     await createProject(name);
+  };
+
+  // Project switch. While a research run is active, switching would leave the
+  // in-flight SSE stream writing into the shared report/sources state — so the
+  // newly-opened project would still show the old run's progress. Confirm first
+  // and abort the AI request on switch.
+  const handleSelectProject = (id: string) => {
+    if (id === selectedProjectId) return;
+    if (isResearching || busyRef.current) {
+      setPendingInterrupt({ type: 'switch', projectId: id });
+      return;
+    }
+    setSelectedProjectId(id);
+  };
+
+  // User confirmed interrupting the active research. Abort the AI request, then
+  // perform the pending action (create a new project or switch to another).
+  const confirmInterrupt = async () => {
+    const action = pendingInterrupt;
+    setPendingInterrupt(null);
+    if (!action) return;
+    // Abort the in-flight research so its SSE stream can't keep writing into
+    // the shared state after we leave the current project.
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    busyRef.current = false;
+    setIsResearching(false);
+    if (action.type === 'create') {
+      await createProject(action.name);
+    } else {
+      setSelectedProjectId(action.projectId);
+    }
+  };
+
+  // User declined — keep the current research running, drop the pending action.
+  const cancelInterrupt = () => {
+    setPendingInterrupt(null);
   };
 
   const handleDeleteProject = async (id: string) => {
@@ -320,6 +387,7 @@ export default function Home() {
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
+    busyRef.current = false;
     setIsResearching(false);
     // Notify backend to cancel the active run
     fetch("/stop", {
@@ -334,6 +402,8 @@ export default function Home() {
 
   // Main research handler — Phase 1: decompose only, wait for user confirmation
   const handleResearch = useCallback(async (question: string, depth: string, style: string) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setIsResearching(true);
     setSubagents([]);
     setSources([]);
@@ -358,6 +428,8 @@ export default function Home() {
 
   // Phase 2: user confirmed sub-questions, proceed with full research
   const handleConfirmSubQuestions = useCallback(async (confirmedQuestions: string[]) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setPendingSubQuestions(null);
     setIsResearching(true);
     setSubagents([]);
@@ -377,6 +449,8 @@ export default function Home() {
 
   // Regenerate report (triggered from chat after user confirms)
   const handleRegenerate = useCallback(async (chatSummary: string) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setIsResearching(true);
     // Don't clear subagents/sources/report here. The backend follow-up path
     // replays the 4-stage lifecycle (with previous papers/articles attached)
@@ -458,10 +532,16 @@ export default function Home() {
 
     abortControllerRef.current = new AbortController();
 
+    // Use the run's projectId as the conversation key. During auto-create the
+    // `selectedProjectId` state hasn't re-rendered into this closure yet, so we
+    // read `body.projectId` directly — this keeps each project's research bound
+    // to its own backend session and prevents cross-project contamination.
+    const convId = (body.projectId as string) || conversationId;
+
     try {
       const response = await fetch('/research', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'makers-conversation-id': conversationId },
+        headers: { 'Content-Type': 'application/json', 'makers-conversation-id': convId },
         body: JSON.stringify(body),
         signal: abortControllerRef.current.signal,
       });
@@ -615,6 +695,7 @@ export default function Home() {
         setSubagents([]);
       }
     } finally {
+      busyRef.current = false;
       setIsResearching(false);
       abortControllerRef.current = null;
       // Use body.projectId first to handle the auto-create case where selectedProjectId
@@ -669,7 +750,7 @@ export default function Home() {
           <ProjectSelector
             projects={projects}
             selectedProjectId={selectedProjectId}
-            onSelect={setSelectedProjectId}
+            onSelect={handleSelectProject}
             onCreate={handleCreateProject}
             onDelete={handleDeleteProject}
             loading={projectsLoading}
@@ -908,6 +989,49 @@ export default function Home() {
           )}
         </div>
       </main>
+
+      {/* Interrupt-research confirmation modal (covers new-project & switch) */}
+      {pendingInterrupt !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={cancelInterrupt}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 shadow-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+                  {t.interruptResearchTitle}
+                </h3>
+                <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                  {t.interruptResearchMessage}
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={cancelInterrupt}
+                className="px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-sm font-medium text-neutral-600 dark:text-neutral-400 transition-colors"
+              >
+                {t.cancel}
+              </button>
+              <button
+                onClick={confirmInterrupt}
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium transition-colors"
+              >
+                {t.interruptResearchConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -167,6 +167,10 @@ export const translations = {
     close: '关闭',
     cancel: '取消',
     confirm: '确认',
+    // Interrupt-on-new-project confirmation
+    interruptResearchTitle: '研究正在进行中',
+    interruptResearchMessage: '当前项目的研究尚未完成，此操作会中断它。确定要继续吗？',
+    interruptResearchConfirm: '中断并继续',
     quotaExhausted: 'AI 模型调用额度已用尽，请稍后再试或升级套餐。',
   },
   en: {
@@ -331,6 +335,10 @@ export const translations = {
     close: 'Close',
     cancel: 'Cancel',
     confirm: 'Confirm',
+    // Interrupt-on-new-project confirmation
+    interruptResearchTitle: 'Research in progress',
+    interruptResearchMessage: 'The current project is still researching. This action will interrupt it. Continue?',
+    interruptResearchConfirm: 'Interrupt & continue',
     quotaExhausted: 'AI model quota exhausted. Please try again later or upgrade your plan.',
   },
 };
