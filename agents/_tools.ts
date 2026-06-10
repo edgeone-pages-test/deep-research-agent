@@ -193,6 +193,17 @@ export const buildSearchWeb = (context: any, registry: CitationRegistry) => tool
       logger.log(`[searchWeb] web_search tool failed: ${msg}`);
     }
 
+    // When web search yields nothing, the most common cause is a missing
+    // WSA_API_KEY: the toolkit silently returns an empty list (no throw) when
+    // the key is absent. Check the injected env directly as a reliable signal.
+    if (articles.length === 0 && !configError) {
+      const wsaKey = (context?.env?.WSA_API_KEY ?? '').trim();
+      if (!wsaKey || /^(your-|<)/i.test(wsaKey)) {
+        configError = 'WSA_API_KEY';
+        logger.log('[searchWeb] empty results and WSA_API_KEY not configured → flagging config error');
+      }
+    }
+
     // Report no results — do not fabricate fake articles. We intentionally do
     // NOT fall back to home-rolled HTML scraping: per the EdgeOne Makers tools
     // spec the platform `web_search` (Tencent Cloud WSA) is the single source
