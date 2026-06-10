@@ -71,7 +71,6 @@ deep-research-agent/
 │   ├── _tools.ts           # 工具工厂（分解、学术、网页、抓取）
 │   ├── _prompts.ts         # 系统提示构建器 + ResearchOptions
 │   ├── _sources.ts         # 论文 / 文章类型与学术 API 解析器
-│   ├── _web-search.ts      # 多引擎降级搜索
 │   ├── _project-store.ts   # 版本持久化辅助函数
 │   ├── _follow-up.ts       # 跟进编辑流（无搜索路径）
 │   ├── _report-cleanup.ts  # 生成后结构清理

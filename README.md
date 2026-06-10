@@ -71,7 +71,6 @@ deep-research-agent/
 │   ├── _tools.ts           # Tool factories (decompose, literature, web, scrape)
 │   ├── _prompts.ts         # System prompt builder + ResearchOptions
 │   ├── _sources.ts         # Paper / Article types + academic API parsers
-│   ├── _web-search.ts      # Multi-engine fallback search
 │   ├── _project-store.ts   # Version persistence helpers
 │   ├── _follow-up.ts       # Follow-up edit stream (no-search path)
 │   ├── _report-cleanup.ts  # Post-generation structure cleanup

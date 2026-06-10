@@ -3,7 +3,6 @@
  *
  * Pure data transformation, no AI runtime dependency. Used by:
  *   - agents/_tools.ts (search_literature tool)
- *   - agents/_web-search.ts (Article shape)
  *   - agents/research.ts (typing the synthesizer pipeline)
  */
 

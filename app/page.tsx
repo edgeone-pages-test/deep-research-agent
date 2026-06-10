@@ -66,6 +66,9 @@ export default function Home() {
   const [sources, setSources] = useState<Source[]>([]);
   const [report, setReport] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Set when the backend reports web_search is unusable due to a missing env
+  // var (e.g. 'WSA_API_KEY'). Drives the top-right config-needed notice.
+  const [webSearchWarning, setWebSearchWarning] = useState<string | null>(null);
   const [tokenUsage, setTokenUsage] = useState({ input: 0, output: 0 });
   const abortControllerRef = useRef<AbortController | null>(null);
   // Synchronous re-entry guard. The submit button is disabled via `isResearching`,
@@ -526,6 +529,9 @@ export default function Home() {
     let lastReport = '';
     let lastSources: Source[] = [];
 
+    // Clear any prior web-search config warning at the start of a fresh run.
+    setWebSearchWarning(null);
+
     abortControllerRef.current = new AbortController();
 
     // Use the run's projectId as the conversation key. During auto-create the
@@ -581,6 +587,13 @@ export default function Home() {
 
             switch (event.type) {
               case 'ping': break;
+
+              // Backend signalled a tool can't run due to missing config
+              // (e.g. web_search needs WSA_API_KEY). Surface a config-needed
+              // notice in the top-right corner.
+              case 'tool_warning':
+                if (event.tool === 'web_search') setWebSearchWarning(event.code || 'WSA_API_KEY');
+                break;
 
               case 'subagent_lifecycle':
                 setSubagents(prev => {
@@ -985,6 +998,32 @@ export default function Home() {
           )}
         </div>
       </main>
+
+      {/* Web-search-not-configured notice (top-right) */}
+      {webSearchWarning && (
+        <div className="fixed top-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 shadow-lg p-4">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300">{t.webSearchUnconfiguredTitle}</h4>
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                {t.webSearchUnconfiguredMsg.replace('{key}', webSearchWarning)}
+              </p>
+            </div>
+            <button
+              onClick={() => setWebSearchWarning(null)}
+              className="flex-shrink-0 p-0.5 rounded hover:bg-amber-200 dark:hover:bg-amber-800 text-amber-600 dark:text-amber-400"
+              aria-label="Dismiss"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Interrupt-research confirmation modal (covers new-project & switch) */}
       {pendingInterrupt !== null && (

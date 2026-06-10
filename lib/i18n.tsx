@@ -171,6 +171,9 @@ export const translations = {
     interruptResearchTitle: '研究正在进行中',
     interruptResearchMessage: '当前项目的研究尚未完成，此操作会中断它。确定要继续吗？',
     interruptResearchConfirm: '中断并继续',
+    // Web search not configured
+    webSearchUnconfiguredTitle: '联网搜索未配置',
+    webSearchUnconfiguredMsg: '本次未能进行联网搜索。请在项目环境变量中配置 {key}（腾讯云 Web Search API），否则仅能使用学术来源。',
     quotaExhausted: 'AI 模型调用额度已用尽，请稍后再试或升级套餐。',
   },
   en: {
@@ -339,6 +342,9 @@ export const translations = {
     interruptResearchTitle: 'Research in progress',
     interruptResearchMessage: 'The current project is still researching. This action will interrupt it. Continue?',
     interruptResearchConfirm: 'Interrupt & continue',
+    // Web search not configured
+    webSearchUnconfiguredTitle: 'Web search not configured',
+    webSearchUnconfiguredMsg: 'Web search could not run. Configure {key} (Tencent Cloud Web Search API) in your project environment variables, otherwise only academic sources are available.',
     quotaExhausted: 'AI model quota exhausted. Please try again later or upgrade your plan.',
   },
 };

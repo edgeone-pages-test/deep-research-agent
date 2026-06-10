@@ -25,19 +25,6 @@ export interface ScrapedUrl {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function getPlatformTool(context: any, name: string): any {
-  const tools = context.tools?.all?.() ?? [];
-  return tools.find((t: any) => (t.name || t.function?.name) === name) || null;
-}
-
-async function executePlatformTool(context: any, toolName: string, args: Record<string, any>): Promise<any> {
-  const tool = getPlatformTool(context, toolName);
-  if (!tool) return null;
-  const execute = tool.execute || tool.handler || tool.invoke;
-  if (typeof execute !== 'function') return null;
-  return execute.call(tool, args);
-}
-
 /**
  * Extract readable text from HTML content.
  * Strips tags, scripts, styles, and excessive whitespace.
@@ -76,44 +63,28 @@ export async function scrapeUrls(context: any, urls: string[]): Promise<ScrapedU
     logger.log(`[scrape] Fetching: ${url}`);
 
     try {
-      // Strategy 1: Platform browser_fetch tool (new API)
+      // Strategy 1: platform browser_fetch tool (the standard way to render a
+      // known URL — see EdgeOne Makers tools spec). Acquire via get() and call
+      // .execute() (the openai-agents-sdk tool shape).
       let content: string | null = null;
       let title = '';
 
-      const browserFetchTool = context.tools?.get?.('browser_fetch') || getPlatformTool(context, 'browser_fetch');
-      if (browserFetchTool) {
-        const execute = browserFetchTool.execute || browserFetchTool.handler || browserFetchTool.invoke;
-        if (typeof execute === 'function') {
-          const browserResult = await execute.call(browserFetchTool, { url });
-          const rawContent = typeof browserResult === 'string' ? browserResult
-            : browserResult?.content?.[0]?.text ? browserResult.content[0].text
-            : browserResult?.content || '';
-          title = browserResult?.title || '';
-          if (rawContent && rawContent.length > 100) {
-            content = rawContent;
-            if (!title) title = extractTitle(rawContent);
-            logger.log(`[scrape] browser_fetch OK: ${url} (${rawContent.length} chars, ${Date.now() - startTime}ms)`);
-          }
+      const browserFetch = context.tools?.get?.('browser_fetch');
+      if (browserFetch && typeof browserFetch.execute === 'function') {
+        const res = await browserFetch.execute({ url });
+        // browser_fetch may return a plain string or an object with content/title.
+        const rawContent = typeof res === 'string' ? res : (res?.content ?? res?.text ?? '');
+        title = (typeof res === 'object' && res?.title) || '';
+        if (rawContent && rawContent.length > 100) {
+          content = rawContent;
+          if (!title) title = extractTitle(rawContent);
+          logger.log(`[scrape] browser_fetch OK: ${url} (${rawContent.length} chars, ${Date.now() - startTime}ms)`);
         }
       }
 
-      // Strategy 1b: Legacy browser tool (old API, fallback)
+      // Strategy 2: runtime fetch fallback (native fetch / sandbox curl race).
       if (!content) {
-        const browserResult = await executePlatformTool(context, 'browser', { op: 'fetch', url });
-        if (browserResult) {
-          const rawContent = typeof browserResult === 'string' ? browserResult : browserResult.content;
-          title = browserResult.title || '';
-          if (rawContent && rawContent.length > 100) {
-            content = rawContent;
-            if (!title) title = extractTitle(rawContent);
-            logger.log(`[scrape] Legacy browser fetch OK: ${url} (${rawContent.length} chars, ${Date.now() - startTime}ms)`);
-          }
-        }
-      }
-
-      // Strategy 2: Fallback to safeFetch
-      if (!content) {
-        logger.log(`[scrape] Browser failed, trying safeFetch: ${url}`);
+        logger.log(`[scrape] browser_fetch unavailable/empty, trying safeFetch: ${url}`);
         const fetched = await safeFetch(context, url, { timeout: 10_000 });
         if (fetched && fetched.length > 100) {
           content = fetched;

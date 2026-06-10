@@ -14,7 +14,6 @@ import {
   type Paper,
   type Article,
 } from './_sources';
-import { searchWithBrowser } from './_web-search';
 
 const logger = createLogger('tools');
 
@@ -135,6 +134,9 @@ export const buildSearchWeb = (context: any, registry: CitationRegistry) => tool
   }),
   execute: async ({ query }) => {
     let articles: Article[] = [];
+    // Set to an env-var name when web search is unusable due to missing config
+    // (e.g. 'WSA_API_KEY'). Surfaced to the frontend so it can prompt the user.
+    let configError: string | null = null;
 
     // Strategy 1: built-in web_search tool (Tencent Cloud WSA search API).
     //
@@ -177,33 +179,32 @@ export const buildSearchWeb = (context: any, registry: CitationRegistry) => tool
           logger.log('[searchWeb] web_search returned no usable results');
         }
       } else {
-        logger.log('[searchWeb] built-in web_search tool not available (is WSA_API_KEY configured?)');
+        // The toolkit only registers `web_search` when WSA_API_KEY is present,
+        // so a missing tool almost always means the key is not configured.
+        configError = 'WSA_API_KEY';
+        logger.log('[searchWeb] built-in web_search tool not available — WSA_API_KEY likely not configured');
       }
     } catch (e) {
-      logger.log(`[searchWeb] web_search tool failed: ${(e as Error).message}`);
-    }
-
-    // Strategy 2: Fallback to searchWithBrowser (curl Bing/DuckDuckGo)
-    if (articles.length === 0) {
-      logger.log('[searchWeb] Falling back to searchWithBrowser');
-      articles = await searchWithBrowser(context, query);
-      if (articles.length > 0) {
-        logger.log(`[searchWeb] searchWithBrowser returned ${articles.length} results:`);
-        articles.forEach((a, i) => {
-          logger.log(`  [${i+1}] title="${a.title}"`);
-          logger.log(`       url=${a.url}`);
-          logger.log(`       source=${a.source} | date=${a.date || '(none)'}`);
-          logger.log(`       snippet=${a.snippet || '(empty)'}`);
-        });
+      const msg = (e as Error).message || '';
+      // 401 / auth failures point at a missing or invalid WSA_API_KEY.
+      if (/401|403|unauthor|forbidden|api[\s_-]?key|wsa/i.test(msg)) {
+        configError = 'WSA_API_KEY';
       }
+      logger.log(`[searchWeb] web_search tool failed: ${msg}`);
     }
 
-    // Strategy 3: Report no results — do not fabricate fake articles
+    // Report no results — do not fabricate fake articles. We intentionally do
+    // NOT fall back to home-rolled HTML scraping: per the EdgeOne Makers tools
+    // spec the platform `web_search` (Tencent Cloud WSA) is the single source
+    // of truth for open-web discovery.
     if (articles.length === 0) {
-      logger.log('All web search strategies failed, no results to return');
+      logger.log(`[searchWeb] web_search returned no results${configError ? ` (configError=${configError})` : ''}`);
       return JSON.stringify({
         articles: [],
-        _note: 'No web articles found. Do NOT invent or fabricate URLs or sources. Report that no verified web sources were found for this query.',
+        ...(configError ? { _configError: configError } : {}),
+        _note: configError
+          ? `Web search is not configured (missing ${configError}). Tell the user web search is unavailable and continue with academic sources only. Do NOT invent or fabricate URLs or sources.`
+          : 'No web articles found. Do NOT invent or fabricate URLs or sources. Report that no verified web sources were found for this query.',
       });
     }
 

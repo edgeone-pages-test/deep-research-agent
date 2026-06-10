@@ -14,7 +14,6 @@
  *   - _shared.ts          → SDK re-exports, logger, sseEvent, safeFetch
  *   - _project-store.ts   → version persistence (mirrors cloud-functions/project)
  *   - _sources.ts         → Paper / Article types + academic API parsers
- *   - _web-search.ts      → multi-engine fallback (sandbox curl → safeFetch)
  *   - _tools.ts           → 4 tool factories (per-request context closures)
  *   - _prompts.ts         → buildSystemPrompt + ResearchOptions
  *   - _follow-up.ts       → streamFollowUpEdit (no-search edit path)
@@ -229,6 +228,11 @@ Call the decompose_question tool with your generated sub-questions.`,
               yield sseEvent({ type: 'subagent_lifecycle', status: 'complete', agent: 'literature-searcher', id: 'stage-2', content: JSON.stringify(papers) });
             } else if (toolName === 'search_web' && parsed.articles) {
               articles = parsed.articles;
+              // Web search couldn't run because a required env var is missing —
+              // tell the frontend so it can prompt the user to configure it.
+              if (parsed._configError) {
+                yield sseEvent({ type: 'tool_warning', tool: 'web_search', code: parsed._configError });
+              }
               yield sseEvent({ type: 'subagent_lifecycle', status: 'complete', agent: 'web-researcher', id: 'stage-3', content: JSON.stringify(articles) });
             } else if (toolName === 'scrape_urls' && parsed.scrapedUrls) {
               scrapedUrls = parsed.scrapedUrls;
