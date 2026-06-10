@@ -27,8 +27,16 @@
 |----------|----------|-------------|
 | `AI_GATEWAY_API_KEY` | 是 | 模型网关 API Key。使用 Makers Models 的 API Key，或任何兼容 OpenAI 协议的提供商 Key。 |
 | `AI_GATEWAY_BASE_URL` | 是 | 网关基础地址。使用 Makers Models 时填写 `https://ai-gateway.edgeone.link/v1`。 |
+| `WSA_API_KEY` | 是 | 腾讯云 Web Search API Key —— 研究过程使用的内置 `web_search` 工具依赖它。未配置时将回退到稳定性较差的网页抓取方案。 |
 
 本模板遵循 OpenAI 兼容标准 —— 可指向 Makers Models 或任何兼容提供商。
+
+### 如何获取 WSA_API_KEY
+
+1. 打开腾讯云 Web Search API 控制台（https://console.cloud.tencent.com/wsapi/index）
+2. 概览页 → “服务 API KEY” → 创建 API KEY，创建后立即复制（关闭后无法再次查看）
+3. 将其填入项目环境变量 `WSA_API_KEY`
+
 
 ### 如何获取 AI_GATEWAY_API_KEY
 

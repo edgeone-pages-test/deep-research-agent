@@ -27,8 +27,16 @@ This template automates rigorous, citation-backed research reports. It decompose
 |----------|----------|-------------|
 | `AI_GATEWAY_API_KEY` | Yes | Model gateway API key. Use your Makers Models API Key, or any OpenAI-compatible provider key. |
 | `AI_GATEWAY_BASE_URL` | Yes | Gateway base URL. For Makers Models, use `https://ai-gateway.edgeone.link/v1`. |
+| `WSA_API_KEY` | Yes | Tencent Cloud Web Search API key — required by the built-in `web_search` tool used during research. Without it, web search falls back to a less reliable scraping path. |
 
 This template follows the OpenAI-compatible standard — point these at Makers Models or any compatible provider.
+
+### How to get WSA_API_KEY
+
+1. Open the Tencent Cloud Web Search API console (https://console.cloud.tencent.com/wsapi/index)
+2. Overview → "Service API KEY" → Create API KEY, then copy it immediately (it cannot be viewed again later)
+3. Copy it into `WSA_API_KEY` in your project environment variables
+
 
 ### How to get AI_GATEWAY_API_KEY
 

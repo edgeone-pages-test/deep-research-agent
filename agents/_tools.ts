@@ -18,6 +18,11 @@ import { searchWithBrowser } from './_web-search';
 
 const logger = createLogger('tools');
 
+/** Parse a JSON string, returning null on failure (never throws). */
+function safeParse(s: string): any {
+  try { return JSON.parse(s); } catch { return null; }
+}
+
 /**
  * Shared citation registry for a single research request. search_literature
  * fills `papers` first (numbered 1..P), then search_web fills `articles`
@@ -131,35 +136,48 @@ export const buildSearchWeb = (context: any, registry: CitationRegistry) => tool
   execute: async ({ query }) => {
     let articles: Article[] = [];
 
-    // Strategy 1: Use built-in web_search tool (most reliable)
+    // Strategy 1: built-in web_search tool (Tencent Cloud WSA search API).
+    //
+    // Per the EdgeOne Makers tools spec, web_search returns a structured
+    // SearchResult[] — { title, href, snippet, site, date } — directly (or as a
+    // JSON string of that array under the openai-agents-sdk framework). It does
+    // NOT use the Claude-MCP `{ content: [{ text }] }` envelope. Requires
+    // `WSA_API_KEY` to be configured in the project environment.
     try {
-      const webSearchTool = context?.tools?.get?.('web_search') || context?.tools?.all?.()?.find((t: any) => t.name === 'web_search');
+      const webSearchTool = context?.tools?.get?.('web_search') ?? context?.tools?.web_search;
       if (webSearchTool) {
         logger.log(`[searchWeb] Using built-in web_search tool, query="${query}"`);
-        const result = await webSearchTool.execute({ query, maxResults: 10 });
-        const parsed = typeof result === 'string' ? JSON.parse(result) : result;
-        // Parse result: web_search returns {title, href, body, engine}[]
-        const items = parsed?.content?.[0]?.text ? JSON.parse(parsed.content[0].text) : (Array.isArray(parsed) ? parsed : []);
-        logger.log(`[searchWeb] raw result type=${typeof result}, parsed keys=${Object.keys(parsed || {}).join(',')}, items count=${Array.isArray(parsed) ? parsed.length : (parsed?.content?.length ?? 'n/a')}`);
-        if (Array.isArray(items) && items.length > 0) {
-          articles = items.map((item: any) => ({
+        const raw = await webSearchTool.execute({ query, maxResults: 10 });
+
+        // Normalize into a SearchResult[]: accept a plain array, a JSON string,
+        // or (defensively) a legacy MCP `{ content: [{ text }] }` envelope.
+        let items: any = typeof raw === 'string' ? safeParse(raw) : raw;
+        if (items && !Array.isArray(items) && typeof items?.content?.[0]?.text === 'string') {
+          items = safeParse(items.content[0].text);
+        }
+        if (!Array.isArray(items)) items = [];
+
+        articles = items
+          .map((item: any) => ({
             title: item.title || '',
             url: item.href || item.url || '',
-            source: (() => { try { return new URL(item.href || item.url || '').hostname.replace('www.', ''); } catch { return ''; } })(),
+            // Prefer the SearchResult `site` field; fall back to the URL host.
+            source: item.site || (() => {
+              try { return new URL(item.href || item.url || '').hostname.replace('www.', ''); } catch { return ''; }
+            })(),
             date: item.date || '',
-            snippet: item.body || item.snippet || '',
-          })).filter((a: Article) => a.title && a.url);
+            snippet: item.snippet || item.body || '',
+          }))
+          .filter((a: Article) => a.title && a.url);
+
+        if (articles.length > 0) {
           logger.log(`[searchWeb] web_search returned ${articles.length} results:`);
-          articles.forEach((a, i) => {
-            logger.log(`  [${i+1}] title="${a.title}"`);
-            logger.log(`       url=${a.url}`);
-            logger.log(`       source=${a.source} | date=${a.date || '(none)'}`);
-            logger.log(`       snippet=${a.snippet || '(empty)'}`);
-          });
+          articles.forEach((a, i) => logger.log(`  [${i + 1}] ${a.title} | ${a.url} | ${a.source}${a.date ? ` | ${a.date}` : ''}`));
         } else {
-          logger.log(`[searchWeb] web_search returned empty/unparseable result:`);
-          logger.log(`  parsed=${JSON.stringify(parsed).slice(0, 1000)}`);
+          logger.log('[searchWeb] web_search returned no usable results');
         }
+      } else {
+        logger.log('[searchWeb] built-in web_search tool not available (is WSA_API_KEY configured?)');
       }
     } catch (e) {
       logger.log(`[searchWeb] web_search tool failed: ${(e as Error).message}`);
