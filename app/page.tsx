@@ -10,6 +10,7 @@ import { FollowUpChat } from './components/follow-up-chat';
 import { VersionSelector } from './components/version-selector';
 import { DiffView } from './components/diff-view';
 import { SubQuestionConfirm } from './components/sub-question-confirm';
+import { DeployButtons } from './components/deploy-buttons';
 import { CitationCoverage } from './components/citation-coverage';
 import { LanguageToggle } from '@/components/ui/language-toggle';
 import { TokenUsage } from '@/components/ui/token-usage';
@@ -793,6 +794,11 @@ export default function Home() {
             )}
 
             <div className="ml-auto flex items-center gap-3">
+              <DeployButtons
+                templateSlug="deep-research-agent"
+                githubUrl="https://github.com/edgeone-pages-test/deep-research-agent"
+                lang={locale}
+              />
               <TokenUsage inputTokens={tokenUsage.input} outputTokens={tokenUsage.output} />
               <LanguageToggle />
             </div>

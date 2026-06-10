@@ -6,7 +6,7 @@ Multi-agent deep research assistant with human-in-the-loop sub-question confirma
 
 **Framework:** None (raw Node.js) · **Category:** Orchestration · **Language:** TypeScript
 
-[![Deploy to EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/makers/new?template=deep-research-edgeone&from=within&fromAgent=1&agentLang=typescript)
+[![Deploy to EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/makers/new?template=deep-research-agent&from=within&fromAgent=1&agentLang=typescript)
 
 <!-- TODO: confirm -->
 ![preview](./assets/preview.png)
