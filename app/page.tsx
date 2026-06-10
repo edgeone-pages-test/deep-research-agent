@@ -80,10 +80,7 @@ export default function Home() {
   // can render skeleton rows on slow networks instead of a misleading
   // "no projects yet" empty state.
   const [projectsLoading, setProjectsLoading] = useState(true);
-  const [versionsLoading, setVersionsLoading] = useState(false);
   // Tracks the per-version load (the "get_version" request that pulls the
-  // saved report body + sources). Distinct from `versionsLoading`, which
-  // covers the project-level "list of versions" fetch. Used to overlay a
   // skeleton on the main content area while we swap projects so the user
   // gets immediate feedback on switch.
   const [loadingVersion, setLoadingVersion] = useState(false);
@@ -143,6 +140,7 @@ export default function Home() {
       setReport('');
       setSources([]);
       setSubagents([]);
+      setVersions([]);
       setCurrentVersion(null);
       setLoadingVersion(true);
       loadProjectVersions(selectedProjectId);
@@ -176,7 +174,6 @@ export default function Home() {
   };
 
   const loadProjectVersions = async (projectId: string): Promise<number> => {
-    setVersionsLoading(true);
     try {
       const res = await fetch('/project', {
         method: 'POST',
@@ -197,9 +194,7 @@ export default function Home() {
         }
         return (v || []).length;
       }
-    } catch {} finally {
-      setVersionsLoading(false);
-    }
+    } catch {}
     return 0;
   };
 
@@ -805,7 +800,7 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="max-w-6xl mx-auto px-6 py-8 min-h-[70vh]">
           {/* Blob storage warning */}
           {blobWarning && (
             <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2">
@@ -821,8 +816,9 @@ export default function Home() {
             </div>
           )}
 
-          {/* Research Form — hidden once a report is generated or research is running */}
-          {!report && !pendingSubQuestions && !isResearching && (!selectedProjectId || versions.length === 0) && (
+          {/* Research Form — hidden once a report is generated, research is
+              running, or a project version is loading */}
+          {!report && !pendingSubQuestions && !isResearching && !loadingVersion && (!selectedProjectId || versions.length === 0) && (
             <>
               {selectedProjectId && versions.length === 0 && (
                 <div className="mb-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-sm flex items-center gap-3">
@@ -865,29 +861,18 @@ export default function Home() {
             </div>
           )}
 
-          {/* Version Selector — show a slim placeholder while versions
-              are loading so the user gets immediate feedback (especially
-              important on slow networks where the project's /get request
-              can take a few hundred ms). Hide entirely once we know the
-              project has zero versions. */}
-          {selectedProjectId && (versionsLoading || versions.length > 0) && (
+          {/* Version Selector — only once the project's versions have finished
+              loading. During the switch the unified skeleton below (which
+              includes a version-bar placeholder) stands in, so the real bar
+              appears together with the report in a single paint. */}
+          {selectedProjectId && !loadingVersion && versions.length > 0 && (
             <div className="mt-6">
-              {versionsLoading && versions.length === 0 ? (
-                <div className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/70 dark:bg-neutral-900/60">
-                  <svg className="w-3.5 h-3.5 animate-spin text-neutral-400" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  <span className="text-xs text-neutral-500 dark:text-neutral-400">{t.versions}…</span>
-                </div>
-              ) : (
-                <VersionSelector
-                  versions={versions}
-                  currentVersion={currentVersion}
-                  onSelectVersion={(v) => loadVersion(selectedProjectId, v)}
-                  onDiff={handleDiff}
-                />
-              )}
+              <VersionSelector
+                versions={versions}
+                currentVersion={currentVersion}
+                onSelectVersion={(v) => loadVersion(selectedProjectId, v)}
+                onDiff={handleDiff}
+              />
             </div>
           )}
 
@@ -911,7 +896,11 @@ export default function Home() {
               the real layout (left sidebar + right report) so the swap
               feels seamless instead of a sudden flash. */}
           {loadingVersion && subagents.length === 0 && !report && !error && (
-            <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <>
+              {/* Version-bar placeholder — matches the real VersionSelector
+                  slot so it doesn't pop in separately after the report. */}
+              <div className="mt-6 h-10 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-900/50 animate-pulse" />
+              <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
               <aside className="lg:col-span-4 space-y-4">
                 <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-3">
                   <div className="h-4 w-24 rounded bg-neutral-200 dark:bg-neutral-800 animate-pulse" />
@@ -947,6 +936,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            </>
           )}
 
           {(subagents.length > 0 || report) && !error && (
