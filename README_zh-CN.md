@@ -57,7 +57,7 @@ edgeone makers dev
 ## 项目结构
 
 ```
-deep-research-edgeone/
+deep-research-agent/
 ├── agents/
 │   ├── _shared.ts          # 模型 / Provider 初始化、SSE 辅助函数、safeFetch、沙箱工具
 │   ├── _tools.ts           # 工具工厂（分解、学术、网页、抓取）

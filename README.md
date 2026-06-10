@@ -57,7 +57,7 @@ Open the local observability dashboard at http://localhost:8080/agent-metrics.
 ## Project Structure
 
 ```
-deep-research-edgeone/
+deep-research-agent/
 ├── agents/
 │   ├── _shared.ts          # Model/provider init, SSE helpers, safeFetch, sandbox utils
 │   ├── _tools.ts           # Tool factories (decompose, literature, web, scrape)
