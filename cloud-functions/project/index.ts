@@ -40,12 +40,14 @@ async function storeGet(store: any, key: string): Promise<any> {
 }
 
 async function storeSet(store: any, key: string, data: unknown, metadataType?: string): Promise<void> {
-  try { await store.clearMessages({ conversationId: key }); } catch {}
+  // We no longer use the `clearMessages + appendMessage` pattern (forbidden
+  // by SOP H-163). Each write appendMessage's a new record; `storeGet` reads
+  // the latest; older records stay as an audit trail.
   await store.appendMessage({
     conversationId: key,
     role: 'system',
     content: JSON.stringify(data),
-    ...(metadataType ? { metadata: { type: metadataType } } : {}),
+    ...(metadataType ? { metadata: { type: metadataType, ts: new Date().toISOString() } } : {}),
   });
 }
 

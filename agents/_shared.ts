@@ -1,9 +1,15 @@
 /**
  * Shared utilities for deep-research agent (OpenAI Agents SDK).
+ *
+ * IMPORTANT: this module MUST NOT read process.env. Per SOP C-49, all
+ * environment access inside `agents/` and `cloud-functions/` must go
+ * through `context.env` (the runtime-injected per-request context). The
+ * model client factory below takes `context.env` as a parameter; callers
+ * pass `context.env` rather than reading from the global process object.
+ *
+ * OpenAI Agents tracing is disabled via the SDK API
+ * (`setTracingDisabled(true)`), not by mutating process.env (SOP C-51).
  */
-
-// Disable OpenAI Agents tracing (we use EdgeOne's own observability)
-process.env.OPENAI_AGENTS_DISABLE_TRACING = 'true';
 
 import {
   Agent,
@@ -12,6 +18,7 @@ import {
   OpenAIChatCompletionsModel,
   OpenAIProvider,
   setDefaultModelProvider,
+  setTracingDisabled,
 } from "@openai/agents";
 import OpenAI from "openai";
 
@@ -21,20 +28,38 @@ export {
   tool,
 };
 
+// Disable OpenAI Agents tracing via the SDK API. This is the supported
+// approach; process.env mutation is forbidden by SOP C-51.
+let _tracingConfigured = false;
+function configureTracingOnce() {
+  if (_tracingConfigured) return;
+  _tracingConfigured = true;
+  try {
+    setTracingDisabled(true);
+  } catch {
+    // SDK may not be present at import time during type-check; ignore.
+  }
+}
+configureTracingOnce();
+
 // ─── Model & Provider ────────────────────────────────────────────────────────
 
-function createOpenAIClient(): OpenAI {
+/**
+ * Create an OpenAI client bound to a particular request's env.
+ * Caller passes `context.env`; we never read process.env here.
+ */
+function createOpenAIClient(env: Record<string, string | undefined>): OpenAI {
   return new OpenAI({
-    apiKey: process.env.AI_GATEWAY_API_KEY!,
-    baseURL: process.env.AI_GATEWAY_BASE_URL!,
+    apiKey: env.AI_GATEWAY_API_KEY!,
+    baseURL: env.AI_GATEWAY_BASE_URL!,
     defaultHeaders: {
       "X-Gateway-Timeout": "600",
     },
   });
 }
 
-export function getModel(): OpenAIChatCompletionsModel {
-  const client = createOpenAIClient();
+export function getModel(env: Record<string, string | undefined>): OpenAIChatCompletionsModel {
+  const client = createOpenAIClient(env);
   return new OpenAIChatCompletionsModel(
     client,
     "@makers/deepseek-v4-flash",
@@ -42,9 +67,9 @@ export function getModel(): OpenAIChatCompletionsModel {
 }
 
 let providerInitialized = false;
-export function ensureProvider() {
+export function ensureProvider(env: Record<string, string | undefined>) {
   if (providerInitialized) return;
-  const client = createOpenAIClient();
+  const client = createOpenAIClient(env);
   setDefaultModelProvider(new OpenAIProvider({
     openAIClient: client,
     useResponses: false,
@@ -148,8 +173,11 @@ async function ensureSandboxInitialized<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Execute a shell command in the remote sandbox.
+ * Execute a shell command in the EdgeOne sandbox via `context.sandbox`.
  * Returns { stdout, stderr } or null if sandbox unavailable.
+ *
+ * NOTE: per SOP G-135 we use the platform-injected sandbox API only. No
+ * hand-rolled `/v1/sandbox/*` HTTP fallback, no process.env reads.
  */
 async function sandboxExec(
   context: any,
@@ -177,40 +205,12 @@ async function sandboxExec(
     }
     sandboxLogger.log("sandbox.commands.run failed:", e.message);
   }
-
-  // Fallback: call sandbox HTTP API directly
-  const baseUrl = process.env.SANDBOX_API_BASE || process.env.SANDBOX_BASE_URL;
-  const conversationId = context?.conversation_id;
-  if (!baseUrl) return null;
-
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout + 5_000);
-    const res = await fetch(`${baseUrl}/v1/shell/exec`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(conversationId ? { "makers-conversation-id": conversationId } : {}),
-      },
-      body: JSON.stringify({ command, timeout: Math.floor(timeout / 1000) }),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return {
-      stdout: data?.data?.output ?? data?.output ?? data?.stdout ?? "",
-      stderr: data?.data?.stderr ?? data?.stderr ?? "",
-    };
-  } catch (e) {
-    sandboxLogger.log("sandbox HTTP fallback failed:", (e as Error).message);
-    return null;
-  }
+  return null;
 }
 
 /**
- * Fetch a URL: race sandbox curl and runtime fetch in parallel.
- * Returns response body text or null on failure.
+ * Fetch a URL by racing the sandbox curl with the runtime's native fetch.
+ * Returns the response body text on first success, or null on failure.
  */
 export async function safeFetch(
   context: any,

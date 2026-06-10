@@ -8,7 +8,8 @@
     }
   },
   "agents": {
-    "externalNodeModules": [],
+    "framework": "openai-agents-sdk",
+    "externalNodeModules": ["@openai/agents", "openai"],
     "timeout": 300
   }
 }

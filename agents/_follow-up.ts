@@ -5,7 +5,7 @@
  * edits the previous report directly with a no-tool agent. Replays the
  * 4-stage lifecycle so the frontend's left panel still shows sub-questions
  * and citations during the edit (which doesn't actually re-search) — see
- * the "方案 B" notes in the project history.
+ * the "Plan B" notes in the project history.
  */
 import {
   Agent,
@@ -30,7 +30,8 @@ export async function* streamFollowUpEdit(
 ): AsyncGenerator<string> {
   const { depth, projectId, locale, previousPapers = [], previousArticles = [], previousScrapedUrls = [], previousSubQuestions = [] } = opts;
   const isEnglish = locale === 'en';
-  const conversationId = context.conversation_id || 'default';
+  // Runtime auto-injects `context.conversation_id` from the HTTP header.
+  const conversationId = context.conversation_id || '';
   const session = context.store?.openaiSession?.(conversationId);
 
   // Replay the standard 4-stage lifecycle so the left panel still shows
@@ -80,7 +81,7 @@ export async function* streamFollowUpEdit(
   const editorAgent = new Agent({
     name: 'report-editor',
     instructions: buildEditorSystemPrompt(isEnglish),
-    model: getModel(),
+    model: getModel(context.env),
     tools: [],
     modelSettings: { maxTokens: 65536 },
   });

@@ -81,12 +81,12 @@ async function* streamChat(
   report: string,
   signal?: AbortSignal
 ): AsyncGenerator<string> {
-  ensureProvider();
+  ensureProvider(context.env);
 
   const agent = new Agent({
     name: "research-chat",
     instructions: buildChatSystemPrompt(report),
-    model: getModel(),
+    model: getModel(context.env),
     tools: [],
     modelSettings: {
       maxTokens: 4096,

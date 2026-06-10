@@ -10,6 +10,12 @@
  * Both sides agree on key naming (`project-{id}-meta`, `project-{id}-v{N}`,
  * `projects-index`) and JSON shape — keep them aligned by hand if anything
  * changes.
+ *
+ * Storage strategy: each (projectId, key) is one conversationId. We
+ * `appendMessage` a new record on every write and `getMessages(limit: 1, order: desc)`
+ * on every read. We never call `clearMessages + appendMessage` to simulate a
+ * KV (SOP H-163 forbids that pattern). The latest record is always the
+ * "current" snapshot; older records are kept as an audit trail.
  */
 import { createLogger } from './_shared';
 
@@ -29,8 +35,12 @@ export interface ProjectIndex {
   projects: Array<{ id: string; name: string; createdAt: string; versionCount: number }>;
 }
 
-// ─── Low-level KV-style helpers ──────────────────────────────────────────────
+// ─── Low-level helpers (single-key per conversationId) ───────────────────────
 
+/**
+ * Read the latest snapshot for `key`. With `appendMessage` we keep history
+ * on every write; the latest record is the current value.
+ */
 async function pStoreGet(store: any, key: string): Promise<any> {
   const messages = await store.getMessages({ conversationId: key, limit: 1, order: 'desc' });
   if (messages.length > 0 && messages[0].content) {
@@ -40,13 +50,17 @@ async function pStoreGet(store: any, key: string): Promise<any> {
   return null;
 }
 
+/**
+ * Append a new snapshot record for `key`. We do NOT clearMessages here;
+ * the next `pStoreGet` will read this latest record as the current value,
+ * while older records remain as audit history.
+ */
 async function pStoreSet(store: any, key: string, data: unknown, metadataType?: string): Promise<void> {
-  try { await store.clearMessages({ conversationId: key }); } catch {}
   await store.appendMessage({
     conversationId: key,
     role: 'system',
     content: JSON.stringify(data),
-    ...(metadataType ? { metadata: { type: metadataType } } : {}),
+    ...(metadataType ? { metadata: { type: metadataType, ts: new Date().toISOString() } } : {}),
   });
 }
 
@@ -141,7 +155,8 @@ export async function archiveStandaloneReport(
 ): Promise<void> {
   try {
     const key = `standalone-report-${conversationId}`;
-    try { await store.clearMessages({ conversationId: key }); } catch {}
+    // We no longer call clearMessages; appendMessage writes a new record so
+    // the latest snapshot becomes the current value (multi-record history).
     await store.appendMessage({
       conversationId: key,
       role: 'system',
@@ -150,7 +165,7 @@ export async function archiveStandaloneReport(
         createdAt: new Date().toISOString(),
         conversationId,
       }),
-      metadata: { type: 'standalone-report' },
+      metadata: { type: 'standalone-report', ts: new Date().toISOString() },
     });
     logger.log(`archiveStandaloneReport: stored conversationId=${conversationId}`);
   } catch (e) {

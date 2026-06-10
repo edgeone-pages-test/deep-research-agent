@@ -901,6 +901,7 @@ export default function Home() {
                 isRegenerating={isResearching}
                 projectId={selectedProjectId || ''}
                 report={report}
+                conversationId={conversationId}
                 completionTick={researchCompleteTick}
               />
             </div>

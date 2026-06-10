@@ -24,10 +24,11 @@ interface FollowUpChatProps {
   isRegenerating: boolean;
   projectId: string;
   report: string;
+  conversationId: string;
   completionTick?: number;
 }
 
-export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projectId, report, completionTick = 0 }: FollowUpChatProps) {
+export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projectId, report, conversationId, completionTick = 0 }: FollowUpChatProps) {
   const { t } = useI18n();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -147,7 +148,10 @@ export function FollowUpChat({ onRegenerate, onAddSource, isRegenerating, projec
 
       const response = await fetch('/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'makers-conversation-id': conversationId,
+        },
         body: JSON.stringify({
           message: userMessage,
           chatHistory,
