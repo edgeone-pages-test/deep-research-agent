@@ -46,7 +46,7 @@ This template follows the OpenAI-compatible standard — point these at Makers M
 
 **Prerequisites**
 - Node.js 18+
-- EdgeOne CLI (`npm i -g @edgeone/cli`)
+- EdgeOne CLI (`npm i -g edgeone`)
 
 ```bash
 npm install

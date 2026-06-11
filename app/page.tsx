@@ -169,7 +169,7 @@ export default function Home() {
         setProjects(p || []);
         setBlobWarning(null);
       } else if (res.status === 503) {
-        setBlobWarning('Blob 存储未配置，项目和聊天记录无法保存。请在 .env 中配置 PROJECT_ID 和 EDGEONE_PAGES_API_TOKEN，或部署到 EdgeOne Makers 平台。');
+        setBlobWarning('当前环境存储服务不可用，项目与对话记录无法保存。部署到 EdgeOne Makers 后将自动启用，无需配置任何环境变量。');
       }
     } catch {} finally {
       setProjectsLoading(false);

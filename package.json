@@ -10,7 +10,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@edgeone/pages-blob": "^0.0.4",
     "@openai/agents": "^0.11.4",
     "clsx": "^2.1.1",
     "marked": "^18.0.4",
