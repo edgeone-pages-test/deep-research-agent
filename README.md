@@ -1,20 +1,20 @@
-# Deep Research
+# Deep Research Agent
 
-Multi-agent deep research assistant with human-in-the-loop sub-question confirmation, academic and web search, iterative report generation, and project-based version management. Built on the OpenAI Agents SDK and deployed on EdgeOne Makers.
+Multi-agent deep research assistant with human-in-the-loop sub-question confirmation, web search, academic search, iterative report generation, and project-based version management. Built on the OpenAI Agents SDK and deployed on EdgeOne Makers.
 
-**Framework:** None (raw Node.js) · **Category:** Orchestration · **Language:** TypeScript
+**Framework:** OpenAI Agents SDK · **Category:** Research · **Language:** TypeScript
 
-[![Deploy to EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/makers/new?template=deep-research-agent&from=within&fromAgent=1&agentLang=typescript)
+[![Deploy to EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/makers/new?template=deep-research-edgeone&from=within&fromAgent=1&agentLang=typescript)
 
 ## Overview
 
-This template automates rigorous, citation-backed research reports. It decomposes a research question into sub-questions for user confirmation, searches academic databases and the live web, synthesizes findings into a structured markdown report, and supports follow-up edits with full version history. An auto-continuation loop ensures reports are complete even when model outputs are truncated.
+This template runs a structured research pipeline that breaks a user question into sub-questions, gathers evidence from both the open web and academic databases, and synthesizes a cited research report. A follow-up chat mode lets users discuss and refine completed reports without re-running searches.
 
-- **Human-in-the-Loop Planning** — AI decomposes the question into sub-questions; the user reviews, edits, and confirms before research proceeds.
-- **Dual-Source Search** — Queries CrossRef + Semantic Scholar for academic papers and uses live web search for news and articles.
-- **Auto-Continuation** — Detects incomplete reports (missing conclusion or references) and automatically continues writing up to 15 times.
-- **Incremental Editing** — Follow-up research loads the previous report and modifies only the requested sections, preserving existing structure.
-- **Project & Version Management** — Research projects, report versions, and follow-up chat history are persisted to Blob storage.
+- **Human-in-the-Loop Decomposition** — The agent first breaks the research question into sub-questions and waits for user confirmation before proceeding.
+- **Dual-Source Research** — Parallel web search (Tencent Cloud Web Search API) and academic search (CrossRef + Semantic Scholar) with URL scraping for detailed content.
+- **Iterative Report Generation** — A synthesizer agent produces the final report with inline citations; a cleanup stage validates citation formatting.
+- **Project Version Management** — Research reports are saved per-project with version history, diffing, and rollback support.
+- **Follow-Up Chat** — A lightweight conversational endpoint answers questions about an existing report and can trigger regeneration.
 
 ## Environment Variables
 
@@ -22,25 +22,26 @@ This template automates rigorous, citation-backed research reports. It decompose
 |----------|----------|-------------|
 | `AI_GATEWAY_API_KEY` | Yes | Model gateway API key. Use your Makers Models API Key, or any OpenAI-compatible provider key. |
 | `AI_GATEWAY_BASE_URL` | Yes | Gateway base URL. For Makers Models, use `https://ai-gateway.edgeone.link/v1`. |
-| `WSA_API_KEY` | Yes | Tencent Cloud Web Search API key — required by the built-in `web_search` tool used during research. Without it, web search falls back to a less reliable scraping path. |
+| `WSA_API_KEY` | No | Tencent Cloud Web Search API (WSA) key for the platform's built-in `web_search` tool. Without it, web search falls back to a less reliable path. |
 
 This template follows the OpenAI-compatible standard — point these at Makers Models or any compatible provider.
 
-### How to get WSA_API_KEY
-
-1. Open the Tencent Cloud Web Search API console (https://console.cloud.tencent.com/wsapi/index)
-2. Overview → "Service API KEY" → Create API KEY, then copy it immediately (it cannot be viewed again later)
-3. Copy it into `WSA_API_KEY` in your project environment variables
-
-
 ### How to get AI_GATEWAY_API_KEY
 
-1. Open the Makers Console (https://console.cloud.tencent.com/edgeone/makers)
+1. Open the Makers Console (https://edgeone.ai/makers/new?s_url=https://console.tencentcloud.com/edgeone/makers)
 2. Sign in and enable Makers
 3. Go to Makers → Models → API Key and create a key
 4. Copy it into `AI_GATEWAY_API_KEY`
 
 > Built-in models are free within quota and great for validation. For production, bind your own paid provider key (BYOK).
+
+### How to get WSA_API_KEY
+
+1. Enable Web Search (WSA) in the Tencent Cloud WSA Console (https://console.cloud.tencent.com/wsapi/index)
+2. Obtain the API Key and set it as `WSA_API_KEY`
+3. Reference: [WSA API Documentation](https://cloud.tencent.com/document/product/1806/130615)
+
+> If you do not use Tencent Cloud WSA, the `web_search` tool implementation can be replaced with a third-party search service (e.g. Exa, Tavily).
 
 ## Local Development
 
@@ -51,37 +52,36 @@ This template follows the OpenAI-compatible standard — point these at Makers M
 ```bash
 npm install
 cp .env.example .env
-# Edit .env with your AI_GATEWAY_API_KEY and AI_GATEWAY_BASE_URL
+# Edit .env with your AI_GATEWAY_API_KEY, AI_GATEWAY_BASE_URL, and WSA_API_KEY
 edgeone makers dev
 ```
 
-Open the local observability dashboard at http://localhost:8080/agent-metrics.
+Open the local observability dashboard at http://localhost:8088/agent-metrics.
 
 ## Project Structure
 
 ```
 deep-research-agent/
 ├── agents/
-│   ├── _shared.ts          # Model/provider init, SSE helpers, safeFetch, sandbox utils
-│   ├── _tools.ts           # Tool factories (decompose, literature, web, scrape)
-│   ├── _prompts.ts         # System prompt builder + ResearchOptions
-│   ├── _sources.ts         # Paper / Article types + academic API parsers
-│   ├── _project-store.ts   # Version persistence helpers
-│   ├── _follow-up.ts       # Follow-up edit stream (no-search path)
-│   ├── _report-cleanup.ts  # Post-generation structure cleanup
 │   ├── research.ts         # POST /research — main research pipeline
-│   ├── chat.ts             # POST /chat — follow-up conversation
-│   ├── scrape.ts           # POST /scrape — URL content extraction
-│   └── stop.ts             # POST /stop — cancel active research
+│   ├── chat.ts             # POST /chat — follow-up discussion
+│   ├── stop.ts             # POST /stop — abort active run
+│   ├── _tools.ts           # Tool factories (decompose, search, scrape)
+│   ├── _prompts.ts         # System prompt builder
+│   ├── _sources.ts         # Academic API parsers (CrossRef, Semantic Scholar)
+│   ├── _project-store.ts   # Version persistence helpers
+│   ├── _follow-up.ts       # No-search edit path for report refinement
+│   ├── _report-cleanup.ts  # Post-processing and citation validation
+│   └── _shared.ts          # SDK re-exports, SSE helpers, logger
 ├── cloud-functions/
-│   ├── project/            # POST /project — project CRUD + versions
-│   ├── enrich-doi/         # POST /enrich-doi — DOI metadata enrichment
-│   └── health/             # GET /health
+│   ├── project/            # Project & version storage
+│   ├── enrich-doi/         # DOI metadata enrichment
+│   ├── health/             # GET /health
+│   ├── _http.ts            # HTTP client utilities
+│   └── _logger.ts          # Shared cloud-function logger
 ├── app/                    # Next.js App Router frontend
-├── components/             # UI components (report view, chat, version diff, etc.)
 ├── lib/
-│   ├── i18n.tsx            # Chinese / English translations
-│   └── utils.ts
+│   └── i18n.tsx            # Chinese / English translations
 └── edgeone.json            # EdgeOne deployment config
 ```
 
@@ -90,39 +90,37 @@ Files prefixed with `_` are private modules — not exposed as public routes.
 ## How It Works
 
 ### Runtime Mode
-Files under `agents/` run in **session mode**: requests with the same `conversation_id` are sticky-routed to the same agent instance. The `/research` agent uses `context.store.openaiSession(conversationId)` to persist conversation history across turns.
+Files under `agents/` run in **session mode**: requests with the same `conversation_id` are sticky-routed to the same agent instance and the same sandbox. This ensures conversation history and uploaded context persist across follow-up messages.
 
 ### End-to-End Workflow
 
-1. **Question entry** — The user enters a research question and selects depth (`quick`, `standard`, or `deep`).
-2. **Sub-question decomposition** — The frontend calls `/research` with `decomposeOnly=true`. A dedicated sub-agent generates focused sub-questions.
-3. **Human confirmation** — The frontend displays editable sub-questions; the user confirms or modifies them.
-4. **Full research** — The frontend calls `/research` again with `confirmedSubQuestions`. The main agent executes:
-   - `decompose_question` — formalizes the sub-question list.
-   - `search_literature` — queries CrossRef and Semantic Scholar for academic papers.
-   - `search_web` — uses the built-in `web_search` tool (with sandbox curl fallback).
-   - `scrape_urls` — extracts content from user-provided URLs when supplied.
-5. **Synthesis** — After all tool outputs are collected, the synthesizer writes the report in streaming markdown via SSE.
-6. **Auto-continuation** — If the report lacks a conclusion or references section, a continuation agent picks up where the output left off (up to 15 retries).
-7. **Structure cleanup** — Duplicate sections, leaked reasoning tags, and formatting issues are automatically removed.
-8. **Persistence** — The final report, sources, and metadata are saved to Blob via `context.store` (or the `/project` cloud function as fallback).
-9. **Follow-up chat** — The user discusses the report via `/chat`; when modifications are agreed, the frontend triggers a follow-up research run that edits the existing report in place.
+1. **Question input** — The frontend POSTs `/research` with the research question, depth level, and optional project ID.
+2. **Sub-question decomposition** — A decomposer agent breaks the question into focused sub-questions (2–7 depending on depth). The frontend presents these for user confirmation.
+3. **User confirmation** — The user edits or confirms the sub-questions. The frontend then POSTs `/research` again with `confirmedSubQuestions` to enter full research mode.
+4. **Parallel research** — The research agent spawns parallel tool calls:
+   - **Web search** (`search_web`) via the platform's `web_search` tool (Tencent Cloud WSA).
+   - **Academic search** (`search_literature`) via CrossRef and Semantic Scholar APIs.
+5. **URL scraping** — Key URLs from web search results are scraped for detailed content using the platform `browser_fetch` tool.
+6. **Report synthesis** — A synthesizer agent combines all sources into a structured research report with inline citations.
+7. **Cleanup & validation** — The report passes through post-processing (preamble stripping, citation validation, structure cleanup).
+8. **Persistence** — The final report is saved as a project version via `cloud-functions/project/`.
+9. **Follow-up chat** — Users can POST `/chat` with an existing report to ask questions or request edits without re-running searches.
 
 ### Key Routes & Parameters
-- `/research` — Body: `{ message/question, depth, projectId, urls, confirmedSubQuestions, decomposeOnly, locale, citationStyle }`.
-- `/chat` — Body: `{ message, chatHistory, report }`. Lightweight conversational endpoint with no search tools.
-- `/scrape` — Body: `{ urls }`. Extracts content from URLs using `browser_fetch` or sandbox curl.
-- `/project` — Body varies by action. Handles project CRUD, version listing, and chat history persistence.
-- `/stop` — Body: `{ conversationId }`. Cancels the active research run.
+- `/research` — Main research endpoint. Body: `{ question, depth, projectId, confirmedSubQuestions?, decomposeOnly? }`.
+- `/chat` — Follow-up discussion about a completed report. Body: `{ message, projectId, chatHistory, report }`.
+- `/stop` — Aborts the active research run. Body: `{ conversation_id }`.
+- `/health` — Liveness probe (lives in `cloud-functions/`, not AI-related).
+- `conversation_id` is generated client-side and forwarded via the `makers-conversation-id` header; the runtime auto-binds it to `context.conversation_id`.
 
 ### Timeouts
-- `agents.timeout`: 300 seconds
+Agent timeout is set to **300 seconds** in `edgeone.json` to accommodate long-running research synthesis.
 
 ## Resources
 
-- [Makers Agents Documentation](https://edgeone.ai/makers)
-- [Makers Quick Start](https://edgeone.ai/makers/docs/quickstart)
-- [Makers Models](https://console.cloud.tencent.com/edgeone/makers/models)
+- [Makers Agents Documentation](https://pages.edgeone.ai/document/agents) <!-- TODO: confirm slug -->
+- [Makers Quick Start](https://pages.edgeone.ai/document/quickstart) <!-- TODO: confirm slug -->
+- [Makers Models](https://pages.edgeone.ai/document/models) <!-- TODO: confirm slug -->
 
 ## License
 

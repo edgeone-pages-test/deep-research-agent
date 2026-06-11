@@ -1,46 +1,47 @@
-# Deep Research（深度研究助手）
+# 深度研究助手
 
-基于 OpenAI Agents SDK 构建、部署在 EdgeOne Makers 上的多 Agent 深度研究助手，支持人机协同子问题确认、学术与网页搜索、迭代式报告生成及项目级版本管理。
+多 Agent 深度研究助手，支持子问题人工确认、联网搜索、学术搜索、迭代报告生成与项目版本管理。基于 OpenAI Agents SDK 构建，部署在 EdgeOne Makers。
 
-**Framework:** None (raw Node.js) · **Category:** Orchestration · **Language:** TypeScript
+**Framework:** OpenAI Agents SDK · **Category:** Research · **Language:** TypeScript
 
-[![Deploy to EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/makers/new?template=deep-research-agent&from=within&fromAgent=1&agentLang=typescript)
+[![部署到 EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/makers/new?template=deep-research-edgeone&from=within&fromAgent=1&agentLang=typescript)
 
-## Overview
+## 概述
 
-本模板自动化生成严谨、带引用的研究报告。它将研究问题分解为子问题供用户确认，检索学术数据库与实时网页，将发现综合为结构化 Markdown 报告，并支持带完整版本历史的跟进编辑。自动续写循环可在模型输出截断时确保报告完整。
+本模板运行一条结构化研究管线：将用户问题分解为子问题，从开放网络与学术数据库收集证据，并合成一份带引用的研究报告。跟进聊天模式允许用户在已完成报告的基础上进行讨论与优化，无需重新执行搜索。
 
-- **人机协同规划** — AI 将问题分解为子问题，用户在研究执行前进行审阅、编辑与确认。
-- **双源搜索** — 查询 CrossRef + Semantic Scholar 获取学术论文，同时通过实时网页搜索获取新闻与文章。
-- **自动续写** — 检测报告是否缺失结论或参考文献，自动最多续写 15 次直至完整。
-- **增量编辑** — 跟进研究加载已有报告，仅修改用户指定部分，保留原有结构。
-- **项目与版本管理** — 研究项目、报告版本与跟进对话历史均持久化到 Blob 存储。
+- **人工确认式分解** —— Agent 先将研究问题拆分为子问题，等待用户确认后再继续。
+- **双源研究** —— 并行执行联网搜索（腾讯云 Web Search API）与学术搜索（CrossRef + Semantic Scholar），并对关键 URL 抓取详细内容。
+- **迭代报告生成** —— 合成 Agent 产出带内联引用的结构化研究报告；清理阶段验证引用格式。
+- **项目版本管理** —— 研究报告按项目保存，支持版本历史、差异对比与回滚。
+- **跟进聊天** —— 轻量级对话端点，基于已有报告回答问题或触发重新生成。
 
-## Environment Variables
+## 环境变量
 
 | 变量 | 必填 | 说明 |
 |----------|----------|-------------|
 | `AI_GATEWAY_API_KEY` | 是 | 模型网关 API Key。使用 Makers Models 的 API Key，或任何兼容 OpenAI 协议的提供商 Key。 |
 | `AI_GATEWAY_BASE_URL` | 是 | 网关基础地址。使用 Makers Models 时填写 `https://ai-gateway.edgeone.link/v1`。 |
-| `WSA_API_KEY` | 是 | 腾讯云 Web Search API Key —— 研究过程使用的内置 `web_search` 工具依赖它。未配置时将回退到稳定性较差的网页抓取方案。 |
+| `WSA_API_KEY` | 否 | 腾讯云 Web Search API（WSA）Key，用于平台内置 `web_search` 工具。未配置时联网搜索将回退到稳定性较差的方案。 |
 
 本模板遵循 OpenAI 兼容标准 —— 可指向 Makers Models 或任何兼容提供商。
 
-### 如何获取 WSA_API_KEY
-
-1. 打开腾讯云 Web Search API 控制台（https://console.cloud.tencent.com/wsapi/index）
-2. 概览页 → “服务 API KEY” → 创建 API KEY，创建后立即复制（关闭后无法再次查看）
-3. 将其填入项目环境变量 `WSA_API_KEY`
-
-
 ### 如何获取 AI_GATEWAY_API_KEY
 
-1. 打开 Makers 控制台（https://console.cloud.tencent.com/edgeone/makers）
+1. 打开 Makers 控制台（https://edgeone.ai/makers/new?s_url=https://console.tencentcloud.com/edgeone/makers）
 2. 登录并启用 Makers
 3. 进入 Makers → Models → API Key，创建 Key
 4. 将其填入 `AI_GATEWAY_API_KEY`
 
 > 内置模型在额度内免费，适合验证；生产环境请绑定自费厂商 Key（BYOK）。
+
+### 如何获取 WSA_API_KEY
+
+1. 在腾讯云 WSA 控制台（https://console.cloud.tencent.com/wsapi/index）启用 Web Search（WSA）
+2. 获取 API Key 并设置为 `WSA_API_KEY`
+3. 参考：[WSA API 文档](https://cloud.tencent.com/document/product/1806/130615)
+
+> 如不使用腾讯云 WSA，可将 `web_search` 工具实现替换为第三方搜索服务（如 Exa、Tavily）。
 
 ## 本地开发
 
@@ -51,37 +52,36 @@
 ```bash
 npm install
 cp .env.example .env
-# 编辑 .env，填入 AI_GATEWAY_API_KEY 与 AI_GATEWAY_BASE_URL
+# 编辑 .env，填入 AI_GATEWAY_API_KEY、AI_GATEWAY_BASE_URL 和 WSA_API_KEY
 edgeone makers dev
 ```
 
-本地可观测面板地址：http://localhost:8080/agent-metrics。
+本地可观测面板地址：http://localhost:8088/agent-metrics。
 
 ## 项目结构
 
 ```
 deep-research-agent/
 ├── agents/
-│   ├── _shared.ts          # 模型 / Provider 初始化、SSE 辅助函数、safeFetch、沙箱工具
-│   ├── _tools.ts           # 工具工厂（分解、学术、网页、抓取）
-│   ├── _prompts.ts         # 系统提示构建器 + ResearchOptions
-│   ├── _sources.ts         # 论文 / 文章类型与学术 API 解析器
+│   ├── research.ts         # POST /research —— 主研究管线
+│   ├── chat.ts             # POST /chat —— 跟进讨论
+│   ├── stop.ts             # POST /stop —— 中止运行
+│   ├── _tools.ts           # 工具工厂（分解、搜索、抓取）
+│   ├── _prompts.ts         # 系统提示词构建器
+│   ├── _sources.ts         # 学术 API 解析器（CrossRef、Semantic Scholar）
 │   ├── _project-store.ts   # 版本持久化辅助函数
-│   ├── _follow-up.ts       # 跟进编辑流（无搜索路径）
-│   ├── _report-cleanup.ts  # 生成后结构清理
-│   ├── research.ts         # POST /research —— 主研究流水线
-│   ├── chat.ts             # POST /chat —— 跟进对话
-│   ├── scrape.ts           # POST /scrape —— URL 内容提取
-│   └── stop.ts             # POST /stop —— 取消活跃研究
+│   ├── _follow-up.ts       # 无搜索编辑路径（报告优化）
+│   ├── _report-cleanup.ts  # 后处理与引用验证
+│   └── _shared.ts          # SDK 重导出、SSE 辅助函数、日志
 ├── cloud-functions/
-│   ├── project/            # POST /project —— 项目增删改查 + 版本
-│   ├── enrich-doi/         # POST /enrich-doi —— DOI 元数据丰富
-│   └── health/             # GET /health
+│   ├── project/            # 项目与版本存储
+│   ├── enrich-doi/         # DOI 元数据增强
+│   ├── health/             # GET /health
+│   ├── _http.ts            # HTTP 客户端工具
+│   └── _logger.ts          # 云函数共享日志
 ├── app/                    # Next.js App Router 前端
-├── components/             # UI 组件（报告视图、对话、版本对比等）
 ├── lib/
-│   ├── i18n.tsx            # 中 / 英翻译
-│   └── utils.ts
+│   └── i18n.tsx            # 中 / 英翻译
 └── edgeone.json            # EdgeOne 部署配置
 ```
 
@@ -90,39 +90,37 @@ deep-research-agent/
 ## 工作原理
 
 ### 运行模式
-`agents/` 下的文件以**会话模式**运行：相同 `conversation_id` 的请求会被粘性路由到同一 Agent 实例。`/research` Agent 通过 `context.store.openaiSession(conversationId)` 跨轮次持久化对话历史。
+`agents/` 下的文件以**会话模式**运行：相同 `conversation_id` 的请求会被粘性路由到同一 Agent 实例及同一沙箱。这保证了对话历史与上传上下文在后续消息中始终可用。
 
 ### 端到端流程
 
-1. **输入问题** —— 用户输入研究问题并选择深度（`quick` / `standard` / `deep`）。
-2. **子问题分解** —— 前端调用 `/research` 并传入 `decomposeOnly=true`。专用子 Agent 生成聚焦子问题。
-3. **人工确认** —— 前端展示可编辑的子问题列表；用户确认或修改。
-4. **完整研究** —— 前端再次调用 `/research` 并传入 `confirmedSubQuestions`。主 Agent 依次执行：
-   - `decompose_question` —— 将子问题列表形式化。
-   - `search_literature` —— 查询 CrossRef 与 Semantic Scholar 获取学术论文。
-   - `search_web` —— 使用内置 `web_search` 工具（带沙箱 curl 降级）。
-   - `scrape_urls` —— 当提供用户指定 URL 时提取其内容。
-5. **综合撰写** —— 所有工具输出收集完毕后，综合 Agent 通过 SSE 流式输出 Markdown 报告。
-6. **自动续写** —— 若报告缺少结论或参考文献章节，续写 Agent 从断点处继续（最多 15 次）。
-7. **结构清理** —— 自动移除重复章节、泄漏的思维标签与格式问题。
-8. **持久化** —— 最终报告、来源与元数据通过 `context.store` 保存到 Blob（或降级到 `/project` 云函数）。
-9. **跟进对话** —— 用户通过 `/chat` 讨论报告；当达成修改共识后，前端触发跟进研究运行，在原位编辑已有报告。
+1. **问题输入** —— 前端 POST `/research`，携带研究问题、深度级别和可选的项目 ID。
+2. **子问题分解** —— 分解 Agent 将问题拆分为聚焦的子问题（2–7 个，取决于深度）。前端展示这些子问题供用户确认。
+3. **用户确认** —— 用户编辑或确认子问题。前端再次 POST `/research`，携带 `confirmedSubQuestions` 进入完整研究模式。
+4. **并行研究** —— 研究 Agent 发起并行工具调用：
+   - **联网搜索**（`search_web`）通过平台 `web_search` 工具（腾讯云 WSA）。
+   - **学术搜索**（`search_literature`）通过 CrossRef 和 Semantic Scholar API。
+5. **URL 抓取** —— 对联网搜索结果中的关键 URL，使用平台 `browser_fetch` 工具抓取详细内容。
+6. **报告合成** —— 合成 Agent 将所有来源整合为一份带内联引用的结构化研究报告。
+7. **清理与验证** —— 报告经过后处理（去除前言、验证引用、清理结构）。
+8. **持久化** —— 最终报告通过 `cloud-functions/project/` 保存为项目版本。
+9. **跟进聊天** —— 用户可以 POST `/chat`，基于已有报告进行提问或请求编辑，无需重新执行搜索。
 
 ### 关键路由与参数
-- `/research` —— 请求体：`{ message/question, depth, projectId, urls, confirmedSubQuestions, decomposeOnly, locale, citationStyle }`。
-- `/chat` —— 请求体：`{ message, chatHistory, report }`。轻量级对话端点，无搜索工具。
-- `/scrape` —— 请求体：`{ urls }`。使用 `browser_fetch` 或沙箱 curl 提取 URL 内容。
-- `/project` —— 请求体因动作而异。处理项目增删改查、版本列表与对话历史持久化。
-- `/stop` —— 请求体：`{ conversationId }`。取消活跃研究运行。
+- `/research` —— 主研究端点。Body：`{ question, depth, projectId, confirmedSubQuestions?, decomposeOnly? }`。
+- `/chat` —— 基于已完成报告的跟进讨论。Body：`{ message, projectId, chatHistory, report }`。
+- `/stop` —— 中止活跃研究运行。Body：`{ conversation_id }`。
+- `/health` —— 存活探针（位于 `cloud-functions/`，不涉及 AI）。
+- `conversation_id` 由前端生成，通过 `makers-conversation-id` Header 传入；运行时会自动绑定到 `context.conversation_id`。
 
-### 运行参数
-- `agents.timeout`：300 秒
+### 超时配置
+`edgeone.json` 中将 Agent 超时设置为 **300 秒**，以适应长时间运行的研究合成。
 
 ## 相关资源
 
-- [Makers Agents 文档](https://edgeone.ai/makers)
-- [Makers 快速开始](https://edgeone.ai/makers/docs/quickstart)
-- [Makers Models](https://console.cloud.tencent.com/edgeone/makers/models)
+- [Makers Agents 文档](https://pages.edgeone.ai/document/agents) <!-- TODO: confirm slug -->
+- [Makers 快速开始](https://pages.edgeone.ai/document/quickstart) <!-- TODO: confirm slug -->
+- [Makers Models](https://pages.edgeone.ai/document/models) <!-- TODO: confirm slug -->
 
 ## 许可证
 
