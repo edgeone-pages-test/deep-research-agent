@@ -2,7 +2,7 @@
  * Shared HTTP helpers for cloud-functions handlers.
  *
  * Cloud-functions can't reuse agents/_shared.ts (which imports the OpenAI
- * Agents SDK). These wrappers handle JSON I/O the way the EdgeOne Pages
+ * Agents SDK). These wrappers handle JSON I/O the way the EdgeOne Makers
  * Node Functions runtime expects — see https://pages.edgeone.ai/document/node-functions
  */
 

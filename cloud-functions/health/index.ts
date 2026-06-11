@@ -1,5 +1,5 @@
 /**
- * Health probe — EdgeOne Pages Node Function.
+ * Health probe — EdgeOne Makers Node Function.
  *
  * File path `cloud-functions/health/index.ts` maps to **GET /health**.
  *

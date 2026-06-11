@@ -1,14 +1,14 @@
 /**
  * Research Project Management — CRUD for persistent research projects.
  *
- * EdgeOne Pages Node Function. File path
+ * EdgeOne Makers Node Function. File path
  * `cloud-functions/project/index.ts` maps to **POST /project**.
  *
  * This file moved out of `agents/` because nothing here uses the AI runtime
  * (no model calls, no agent SDK) — it's pure storage CRUD over the same
  * `context.agent.store` that the agents in `agents/` write to. Splitting AI
  * vs. non-AI endpoints into `agents/` vs. `cloud-functions/` matches the
- * EdgeOne Pages template conventions used by openai-agents-test and
+ * EdgeOne Makers template conventions used by openai-agents-test and
  * csv-analyze-agent.
  *
  * Actions: create, list, get, delete, get_version, diff,
@@ -87,8 +87,8 @@ export async function onRequestPost(context: any): Promise<Response> {
   logger.log(`→ action=${action || '(missing)'}`);
 
   if (!store) {
-    logger.error('store not available — context.agent.store is null. Not running on EdgeOne Pages?');
-    return errorResponse('Storage not available (deploy to EdgeOne Pages)', 503);
+    logger.error('store not available — context.agent.store is null. Not running on EdgeOne Makers?');
+    return errorResponse('Storage not available (deploy to EdgeOne Makers)', 503);
   }
 
   try {
@@ -315,7 +315,7 @@ export async function onRequestPost(context: any): Promise<Response> {
       msg.includes('Memory storage operation failed');
     if (isStorageError) {
       logger.error(`storage error (action=${action}):`, msg);
-      return errorResponse('Storage not available (deploy to EdgeOne Pages)', 503);
+      return errorResponse('Storage not available (deploy to EdgeOne Makers)', 503);
     }
     logger.error(`unhandled error (action=${action}):`, msg);
     return errorResponse(msg, 500);

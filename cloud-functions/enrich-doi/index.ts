@@ -1,5 +1,5 @@
 /**
- * DOI Enrichment — EdgeOne Pages Node Function.
+ * DOI Enrichment — EdgeOne Makers Node Function.
  *
  * File path `cloud-functions/enrich-doi/index.ts` maps to **POST /enrich-doi**.
  *
