@@ -1,15 +1,10 @@
 # Deep Research（深度研究助手）
 
-**语言：** [English](./README.md) | 简体中文
-
 基于 OpenAI Agents SDK 构建、部署在 EdgeOne Makers 上的多 Agent 深度研究助手，支持人机协同子问题确认、学术与网页搜索、迭代式报告生成及项目级版本管理。
 
 **Framework:** None (raw Node.js) · **Category:** Orchestration · **Language:** TypeScript
 
 [![Deploy to EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/makers/new?template=deep-research-agent&from=within&fromAgent=1&agentLang=typescript)
-
-<!-- TODO: confirm -->
-![preview](./assets/preview.png)
 
 ## Overview
 

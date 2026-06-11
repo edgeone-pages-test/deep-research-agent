@@ -1,15 +1,10 @@
 # Deep Research
 
-**Language:** English | [简体中文](./README_zh-CN.md)
-
 Multi-agent deep research assistant with human-in-the-loop sub-question confirmation, academic and web search, iterative report generation, and project-based version management. Built on the OpenAI Agents SDK and deployed on EdgeOne Makers.
 
 **Framework:** None (raw Node.js) · **Category:** Orchestration · **Language:** TypeScript
 
 [![Deploy to EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/makers/new?template=deep-research-agent&from=within&fromAgent=1&agentLang=typescript)
-
-<!-- TODO: confirm -->
-![preview](./assets/preview.png)
 
 ## Overview
 
